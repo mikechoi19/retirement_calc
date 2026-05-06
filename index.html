@@ -570,7 +570,7 @@ function setupDrag(p){
   const cv=document.getElementById(`ic-${p}`);
   function s(cx,cy){const i=gBI(p,cx);if(i<0)return;PS[p].dr=true;PS[p].di=i;doDrag(p,cx,cy);}
   function m(cx,cy){if(PS[p].dr){doDrag(p,cx,cy);}else{updateStats(p,gBI(p,cx));}}
-  function e(){PS[p].dr=false;PS[p].di=-1;document.getElementById(`dt-${p}`).style.display='none';updateStats(p,-1);}
+  function e(){PS[p].dr=false;PS[p].di=-1;document.getElementById(`dt-${p}`).style.display='none';updateStats(p,-1);saveAll();}
   cv.onmousedown=ev=>s(ev.clientX,ev.clientY);cv.onmousemove=ev=>{if(!PS[p].dr)m(ev.clientX,ev.clientY);};cv.onmouseleave=()=>{if(!PS[p].dr)updateStats(p,-1);};
   cv.ontouchstart=ev=>{ev.preventDefault();const t=ev.touches[0];s(t.clientX,t.clientY);};cv.ontouchmove=ev=>{ev.preventDefault();const t=ev.touches[0];m(t.clientX,t.clientY);};cv.ontouchend=e;
   const mmk=`_mm${p}`,muk=`_mu${p}`;if(window[mmk])window.removeEventListener('mousemove',window[mmk]);if(window[muk])window.removeEventListener('mouseup',window[muk]);
@@ -600,7 +600,7 @@ function calcSS(p){
   document.getElementById(`sss-${p}`).textContent=`AIME: ${fmtUSD(aime)} / 월   |   PIA(FRA ${f.toFixed(1)}세): ${fmtUSD(pia)} / 월\n${ca}세 수령 조정 후: ${fmtUSD(adj)} / 월 (${sign}${pct}%)\n※ 현재(${CY}년) 달러 기준 추정값. 실제 수령액은 매년 COLA(물가연동) 반영돼 증가해요.`;
   document.getElementById(`fra-${p}`).textContent=Number.isInteger(f)?f+'세':Math.floor(f)+'세 '+Math.round((f%1)*12)+'개월';
   document.getElementById(`adj-${p}`).textContent=sign+pct+'%';
-  document.getElementById(`ssr-${p}`).style.display='block';updateApplyBox();
+  document.getElementById(`ssr-${p}`).style.display='block';updateApplyBox();saveAll();
 }
 function updateApplyBox(){
   const box=document.getElementById('apply-box');if(!PS[0].res&&!PS[1].res){box.style.display='none';return;}
@@ -616,9 +616,9 @@ function applySSToCalc(){
   const n=document.getElementById('ss-notice');n.style.display='block';
   const fmtUSD=v=>'$'+Math.round(v).toLocaleString('en-US');
   let lines=[];if(ASS[0])lines.push(`본인: ${fmtUSD(ASS[0].monthly)}/월 (${ASS[0].claimAge}세부터)`);if(ASS[1])lines.push(`배우자: ${fmtUSD(ASS[1].monthly)}/월 (${ASS[1].claimAge}세부터)`);lines.push(`합산: ${fmtUSD((ASS[0]?.monthly||0)+(ASS[1]?.monthly||0))}/월`);
-  document.getElementById('ss-notice-detail').textContent=lines.join('\n');switchTab(0);
+  document.getElementById('ss-notice-detail').textContent=lines.join('\n');switchTab(0);saveAll();
 }
-function removeSS(){ASS=[null,null];document.getElementById('ss-notice').style.display='none';document.getElementById('ss-legend').style.display='none';}
+function removeSS(){ASS=[null,null];document.getElementById('ss-notice').style.display='none';document.getElementById('ss-legend').style.display='none';saveAll();}
 
 // legacyAtDeath: 사망 시점 명목 금액
 // realAnn: 은퇴 첫 해 연간 생활비 (물가 이미 반영된 값)
@@ -700,6 +700,7 @@ function updateTotal(){
   });
   document.getElementById('total-annual').textContent=fmt(t);
   document.getElementById('total-monthly').textContent=fmt(t/12)+' / 월';
+  saveAll();
 }
 function getAT(){let t=0;document.querySelectorAll('#expense-body tr').forEach(r=>{const a=parseFloat(r.querySelector('.amt-input').value)||0;t+=ta(a,r.querySelector('.period-select').value);});return t;}
 
@@ -893,12 +894,12 @@ function calc2(){
 function addRow(name='',amount='',period='monthly'){
   const tbody=document.getElementById('expense-body'),tr=document.createElement('tr');tr.draggable=true;
   const annVal = amount ? fmt(ta(parseFloat(amount)||0,period)) : fmt(0);
-  tr.innerHTML=`<td><div class="drag-handle">⠿</div></td><td><input type="text" class="name-input" placeholder="항목 이름" value="${name}"></td><td><input type="number" class="amt-input" placeholder="0" value="${amount}" min="0" oninput="updateTotal()"></td><td><select class="period-select" onchange="updateTotal()"><option value="monthly" ${period==='monthly'?'selected':''}>월</option><option value="annual" ${period==='annual'?'selected':''}>연</option></select></td><td class="annual-equiv" style="text-align:right;padding-right:8px;">${annVal}</td><td><button class="del-btn" onclick="this.closest('tr').remove();updateTotal()">×</button></td>`;
+  tr.innerHTML=`<td><div class="drag-handle">⠿</div></td><td><input type="text" class="name-input" placeholder="항목 이름" value="${name}"></td><td><input type="number" class="amt-input" placeholder="0" value="${amount}" min="0" oninput="updateTotal()"></td><td><select class="period-select" onchange="updateTotal()"><option value="monthly" ${period==='monthly'?'selected':''}>월</option><option value="annual" ${period==='annual'?'selected':''}>연</option></select></td><td class="annual-equiv" style="text-align:right;padding-right:8px;">${annVal}</td><td><button class="del-btn" onclick="this.closest('tr').remove();updateTotal();saveAll()">×</button></td>`;
   tr.addEventListener('dragstart',e=>{rowSrc=tr;setTimeout(()=>tr.classList.add('dragging'),0);e.dataTransfer.effectAllowed='move';});
   tr.addEventListener('dragend',()=>{tr.classList.remove('dragging');document.querySelectorAll('#expense-body tr').forEach(r=>r.classList.remove('drag-over'));rowSrc=null;});
   tr.addEventListener('dragover',e=>{e.preventDefault();if(rowSrc&&rowSrc!==tr){document.querySelectorAll('#expense-body tr').forEach(r=>r.classList.remove('drag-over'));tr.classList.add('drag-over');}});
   tr.addEventListener('dragleave',()=>tr.classList.remove('drag-over'));
-  tr.addEventListener('drop',e=>{e.preventDefault();tr.classList.remove('drag-over');if(rowSrc&&rowSrc!==tr){const rows=[...tbody.querySelectorAll('tr')],si=rows.indexOf(rowSrc),ti=rows.indexOf(tr);if(si<ti)tbody.insertBefore(rowSrc,tr.nextSibling);else tbody.insertBefore(rowSrc,tr);updateTotal();}});
+  tr.addEventListener('drop',e=>{e.preventDefault();tr.classList.remove('drag-over');if(rowSrc&&rowSrc!==tr){const rows=[...tbody.querySelectorAll('tr')],si=rows.indexOf(rowSrc),ti=rows.indexOf(tr);if(si<ti)tbody.insertBefore(rowSrc,tr.nextSibling);else tbody.insertBefore(rowSrc,tr);updateTotal();saveAll();}});
   tbody.appendChild(tr);updateTotal();
 }
 
@@ -914,10 +915,215 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-[{name:'기본 생활비',amount:2000,period:'monthly'},{name:'집 유지비 + Property Tax',amount:15000,period:'annual'},{name:'여행 비용',amount:10000,period:'annual'},{name:'기타 / 비상금',amount:1000,period:'monthly'}].forEach(r=>addRow(r.name,r.amount,r.period));
-updateHint(0);updateHint(1);rebuildChart(0,true);
-// init preview
+// ══════════════════════════════════════════
+// localStorage 저장 / 복원
+// ══════════════════════════════════════════
+const LS_KEY = 'retirement_calc_v1';
+
+let _appReady = false;
+
+function saveAll() {
+  if (!_appReady) return;
+  try {
+    // 지출 항목
+    const expenses = [];
+    document.querySelectorAll('#expense-body tr').forEach(r => {
+      expenses.push({
+        name:   r.querySelector('.name-input').value,
+        amount: r.querySelector('.amt-input').value,
+        period: r.querySelector('.period-select').value,
+      });
+    });
+
+    // SS 소득 데이터
+    const ssIncomes = [
+      PS[0].d.map(x => x.income),
+      PS[1].d.map(x => x.income),
+    ];
+
+    const data = {
+      // 화폐
+      currency: document.getElementById('currency-select').value,
+
+      // 지출 항목
+      expenses,
+
+      // 탭0 — 필요 저축액
+      p1_current_age: document.getElementById('p1_current_age').value,
+      p1_retire_age:  document.getElementById('p1_retire_age').value,
+      a_lifespan:     document.getElementById('a_lifespan').value,
+      a_return:       document.getElementById('a_return').value,
+      a_inflation:    document.getElementById('a_inflation').value,
+      a_legacy:       document.getElementById('a_legacy').value,
+      a_legacy_real:  document.getElementById('a_legacy_real').checked,
+
+      // 탭1 — 은퇴 가능 시점
+      p2_age:       document.getElementById('p2_age').value,
+      p2_current:   document.getElementById('p2_current').value,
+      p2_annual:    document.getElementById('p2_annual').value,
+      p2_prereturn: document.getElementById('p2_prereturn').value,
+
+      // 탭2 — SS 본인
+      p0_cur:  document.getElementById('p0_cur').value,
+      p0_by:   document.getElementById('p0_by').value,
+      p0_mode: document.getElementById('p0_mode').value,
+      p0_sy:   document.getElementById('p0_sy').value,
+      p0_sa:   document.getElementById('p0_sa').value,
+      p0_end:  document.getElementById('p0_end').value,
+      p0_ca:   document.getElementById('p0_ca').value,
+
+      // 탭2 — SS 배우자
+      p1_cur:  document.getElementById('p1_cur').value,
+      p1_by:   document.getElementById('p1_by').value,
+      p1_mode: document.getElementById('p1_mode').value,
+      p1_sy:   document.getElementById('p1_sy').value,
+      p1_sa:   document.getElementById('p1_sa').value,
+      p1_end:  document.getElementById('p1_end').value,
+      p1_ca:   document.getElementById('p1_ca').value,
+
+      // SS 소득 차트 데이터
+      ssIncomes,
+
+      // SS 계산 결과 (반영 여부)
+      ASS,
+    };
+
+    localStorage.setItem(LS_KEY, JSON.stringify(data));
+  } catch(e) {
+    console.warn('저장 실패:', e);
+  }
+}
+
+function loadAll() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+
+    // 화폐
+    if (d.currency) {
+      document.getElementById('currency-select').value = d.currency;
+      onCurrencyChange();
+    }
+
+    // 지출 항목
+    if (d.expenses && d.expenses.length > 0) {
+      d.expenses.forEach(r => addRow(r.name, r.amount, r.period));
+    } else {
+      return false; // 저장된 항목 없으면 기본값 사용
+    }
+
+    // 탭0
+    const set = (id, val) => { if (val !== undefined && val !== '') document.getElementById(id).value = val; };
+    set('p1_current_age', d.p1_current_age);
+    set('p1_retire_age',  d.p1_retire_age);
+    set('a_lifespan',     d.a_lifespan);
+    set('a_return',       d.a_return);
+    set('a_inflation',    d.a_inflation);
+    set('a_legacy',       d.a_legacy);
+    if (d.a_legacy_real !== undefined)
+      document.getElementById('a_legacy_real').checked = d.a_legacy_real;
+
+    // 탭1
+    set('p2_age',       d.p2_age);
+    set('p2_current',   d.p2_current);
+    set('p2_annual',    d.p2_annual);
+    set('p2_prereturn', d.p2_prereturn);
+
+    // 탭2 — SS 본인
+    set('p0_cur', d.p0_cur); set('p0_by', d.p0_by);
+    set('p0_sy',  d.p0_sy);  set('p0_sa', d.p0_sa);
+    set('p0_end', d.p0_end); set('p0_ca', d.p0_ca);
+    if (d.p0_mode) { document.getElementById('p0_mode').value = d.p0_mode; toggleMode(0); }
+
+    // 탭2 — SS 배우자
+    set('p1_cur', d.p1_cur); set('p1_by', d.p1_by);
+    set('p1_sy',  d.p1_sy);  set('p1_sa', d.p1_sa);
+    set('p1_end', d.p1_end); set('p1_ca', d.p1_ca);
+    if (d.p1_mode) { document.getElementById('p1_mode').value = d.p1_mode; toggleMode(1); }
+
+    // SS 소득 차트 복원
+    if (d.ssIncomes) {
+      [0, 1].forEach(p => {
+        const inc = d.ssIncomes[p];
+        if (!inc || !inc.length) return;
+        rebuildChart(p, false); // 구조만 만들기
+        // 저장된 소득값 덮어쓰기
+        PS[p].d.forEach((item, i) => {
+          if (inc[i] !== undefined) item.income = inc[i];
+        });
+        renderIC(p);
+        updateStats(p, -1);
+      });
+    }
+
+    // SS 계산 결과 복원
+    if (d.ASS) {
+      ASS = d.ASS;
+      // SS notice 업데이트
+      if (ASS[0] || ASS[1]) {
+        const fmtUSD = v => '$' + Math.round(v).toLocaleString('en-US');
+        const n = document.getElementById('ss-notice');
+        n.style.display = 'block';
+        let lines = [];
+        if (ASS[0]) lines.push(`본인: ${fmtUSD(ASS[0].monthly)}/월 (${ASS[0].claimAge}세부터)`);
+        if (ASS[1]) lines.push(`배우자: ${fmtUSD(ASS[1].monthly)}/월 (${ASS[1].claimAge}세부터)`);
+        lines.push(`합산: ${fmtUSD((ASS[0]?.monthly||0)+(ASS[1]?.monthly||0))}/월`);
+        document.getElementById('ss-notice-detail').textContent = lines.join('\n');
+        // SS 탭 결과 배너도 복원
+        [0, 1].forEach(p => {
+          if (!ASS[p]) return;
+          const fv = ASS[p].monthly;
+          document.getElementById(`ssv-${p}`).textContent = fmtUSD(fv) + ' / 월';
+          document.getElementById(`ssr-${p}`).style.display = 'block';
+        });
+        updateApplyBox();
+      }
+    }
+
+    return true;
+  } catch(e) {
+    console.warn('복원 실패:', e);
+    return false;
+  }
+}
+
+// 자동 저장: 모든 input/change 이벤트 감지
+function setupAutoSave() {
+  // 일반 input 필드들
+  document.querySelectorAll('input, select').forEach(el => {
+    el.addEventListener('change', saveAll);
+    el.addEventListener('input', saveAll);
+  });
+
+  // 지출 테이블은 동적으로 추가되므로 MutationObserver로 감지
+  const observer = new MutationObserver(() => saveAll());
+  const tbody = document.getElementById('expense-body');
+  if (tbody) observer.observe(tbody, { childList: true, subtree: true, characterData: true });
+}
+
+// ─── Init ───
+updateHint(0); updateHint(1);
+
+const hasSaved = loadAll();
+if (!hasSaved) {
+  // 저장된 데이터 없을 때만 기본 샘플 항목 추가
+  [{name:'기본 생활비',amount:2000,period:'monthly'},
+   {name:'집 유지비 + Property Tax',amount:15000,period:'annual'},
+   {name:'여행 비용',amount:10000,period:'annual'},
+   {name:'기타 / 비상금',amount:1000,period:'monthly'}
+  ].forEach(r => addRow(r.name, r.amount, r.period));
+  rebuildChart(0, true);
+} else {
+  // 저장된 데이터 있을 때 힌트만 갱신
+  updateHint(0); updateHint(1);
+  if (PS[0].d.length === 0) rebuildChart(0, true);
+}
+
 onCurrencyChange();
+setupAutoSave();
+_appReady = true;
+
 </script>
 </body>
 </html>
