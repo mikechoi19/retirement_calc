@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>은퇴 계산기</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1a1a" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="은퇴계산기">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f5f5;
+    --color-text-primary: #111111;
+    --color-text-secondary: #555555;
+    --color-text-tertiary: #888888;
+    --color-border-primary: #333333;
+    --color-border-secondary: #cccccc;
+    --color-border-tertiary: #e5e5e5;
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1a1a1a;
+      --color-background-secondary: #252525;
+      --color-text-primary: #f0f0f0;
+      --color-text-secondary: #aaaaaa;
+      --color-text-tertiary: #666666;
+      --color-border-primary: #cccccc;
+      --color-border-secondary: #444444;
+      --color-border-tertiary: #333333;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-sans); background: var(--color-background-primary); color: var(--color-text-primary); padding: 1.5rem; max-width: 720px; margin: 0 auto; }
+
+  /* Currency selector bar */
+  .currency-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 1.25rem;
+    padding: 10px 14px;
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-md);
+    border: 0.5px solid var(--color-border-tertiary);
+  }
+  .currency-bar label {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+  }
+  .currency-select {
+    padding: 5px 10px;
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    font-size: 13px;
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    cursor: pointer;
+    flex: 1;
+    max-width: 220px;
+  }
+  .currency-select:focus { outline: none; border-color: var(--color-border-primary); }
+  .currency-preview {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    margin-left: auto;
+  }
+
+  .tabs { display: flex; border-bottom: 0.5px solid var(--color-border-tertiary); margin-bottom: 1.5rem; }
+  .tab { padding: 8px 14px; font-size: 13px; color: var(--color-text-secondary); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -0.5px; white-space: nowrap; font-family: var(--font-sans); }
+  .tab.active { color: var(--color-text-primary); border-bottom: 2px solid var(--color-text-primary); font-weight: 500; }
+  .panel { display: none; } .panel.active { display: block; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 13px; color: var(--color-text-secondary); }
+  .field input, .field select { padding: 8px 12px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); font-size: 15px; background: var(--color-background-primary); color: var(--color-text-primary); width: 100%; font-family: var(--font-sans); }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--color-border-primary); }
+  .field .hint { font-size: 12px; color: var(--color-text-tertiary); line-height: 1.6; }
+  .result-box { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 1.25rem 1.5rem; margin-top: 1.5rem; }
+  .result-label { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 6px; }
+  .result-value { font-size: 28px; font-weight: 500; color: var(--color-text-primary); }
+  .result-sub { font-size: 13px; color: var(--color-text-tertiary); margin-top: 6px; line-height: 1.8; white-space: pre-line; }
+  .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 1.5rem; }
+  .result-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 1rem; }
+  .calc-btn { width: 100%; padding: 10px; margin-top: 1rem; background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); font-size: 14px; cursor: pointer; color: var(--color-text-primary); font-family: var(--font-sans); }
+  .calc-btn:hover { background: var(--color-background-secondary); }
+  .apply-btn { width: 100%; padding: 10px; margin-top: 10px; background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); font-size: 14px; cursor: pointer; color: var(--color-text-primary); font-family: var(--font-sans); }
+  .apply-btn.applied { border-color: #1D9E75; color: #1D9E75; }
+  .section-divider { border-top: 0.5px solid var(--color-border-tertiary); margin: 1.25rem 0 1rem; }
+  .section-label { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 10px; }
+  .expense-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  .expense-table th { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); text-align: left; padding: 6px 8px; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .expense-table td { padding: 5px 4px; vertical-align: middle; }
+  .expense-table td input[type="text"], .expense-table td input[type="number"] { padding: 6px 8px; border: 0.5px solid var(--color-border-tertiary); border-radius: 6px; font-size: 14px; background: var(--color-background-primary); color: var(--color-text-primary); width: 100%; font-family: var(--font-sans); }
+  .expense-table td select { padding: 6px; border: 0.5px solid var(--color-border-tertiary); border-radius: 6px; font-size: 13px; background: var(--color-background-primary); color: var(--color-text-primary); font-family: var(--font-sans); width: 100%; }
+  .annual-equiv { font-size: 13px; color: var(--color-text-secondary); text-align: right; padding-right: 8px; }
+  .del-btn { background: none; border: none; cursor: pointer; color: var(--color-text-tertiary); font-size: 16px; padding: 2px 6px; border-radius: 4px; }
+  .drag-handle { cursor: grab; color: var(--color-text-tertiary); font-size: 14px; padding: 2px 6px; user-select: none; display: flex; align-items: center; }
+  .add-btn { font-size: 13px; color: var(--color-text-secondary); background: none; border: 0.5px dashed var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 7px 14px; cursor: pointer; margin-top: 4px; font-family: var(--font-sans); }
+  .total-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 8px 0; border-top: 0.5px solid var(--color-border-tertiary); margin-top: 4px; }
+  .total-label { font-size: 13px; color: var(--color-text-secondary); }
+  .total-value { font-size: 15px; font-weight: 500; }
+  tr.dragging { opacity: 0.4; }
+  tr.drag-over { border-top: 2px solid var(--color-border-primary); }
+  .assump-box { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; margin-top: 1rem; }
+  .assump-title { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 10px; }
+  .chart-wrap { margin-top: 1.5rem; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem; }
+  .chart-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .chart-sub { font-size: 12px; color: var(--color-text-tertiary); margin-bottom: 1rem; }
+  .legend { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  canvas { width: 100% !important; }
+  .ss-banner { margin-top: 1.25rem; border: 0.5px solid rgba(29,158,117,0.35); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; background: rgba(29,158,117,0.04); }
+  .income-canvas { display: block; width: 100%; border-radius: 6px; cursor: ns-resize; }
+  .drag-tip { position: absolute; background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); color: var(--color-text-primary); font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 6px; pointer-events: none; white-space: nowrap; display: none; z-index: 10; transform: translateX(-50%); }
+  .drag-tip.cap { background: #BA7517; border-color: #BA7517; color: #fff; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .stat { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 8px 12px; }
+  .stat .sl { font-size: 11px; color: var(--color-text-tertiary); }
+  .stat .sv { font-size: 14px; font-weight: 500; margin-top: 2px; }
+  .cap-leg { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-tertiary); margin-bottom: 6px; }
+  .cap-leg-line { width: 24px; height: 0; border-top: 2px dashed #EF9F27; }
+  .ptabs { display: flex; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); overflow: hidden; width: fit-content; margin-bottom: 1.25rem; }
+  .ptab { padding: 7px 20px; font-size: 13px; cursor: pointer; border: none; background: none; color: var(--color-text-secondary); font-family: var(--font-sans); }
+  .ptab.active { background: var(--color-background-secondary); color: var(--color-text-primary); font-weight: 500; }
+  .ppanel { display: none; } .ppanel.active { display: block; }
+  .apply-box { margin-top: 1.25rem; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; }
+  .apply-box .title { font-size: 13px; font-weight: 500; margin-bottom: 10px; }
+  .arow { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .atotal { display: flex; justify-content: space-between; align-items: center; padding: 8px 0 0; border-top: 0.5px solid var(--color-border-secondary); margin-top: 4px; }
+
+  /* Currency tag badge next to header */
+  .currency-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 4px;
+    padding: 2px 7px;
+    margin-left: 8px;
+    vertical-align: middle;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+
+<!-- Currency Selector -->
+<div class="currency-bar">
+  <label>화폐 단위</label>
+  <select class="currency-select" id="currency-select" onchange="onCurrencyChange()">
+    <option value="USD">🇺🇸 USD — 미국 달러 ($)</option>
+    <option value="EUR">🇪🇺 EUR — 유로 (€)</option>
+    <option value="GBP">🇬🇧 GBP — 영국 파운드 (£)</option>
+    <option value="JPY">🇯🇵 JPY — 일본 엔 (¥)</option>
+    <option value="CNY">🇨🇳 CNY — 중국 위안 (¥)</option>
+    <option value="KRW">🇰🇷 KRW — 한국 원 (₩)</option>
+    <option value="NONE">— 단위 없음</option>
+  </select>
+  <span class="currency-preview" id="currency-preview">예: $1,200 / $50,000</span>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab(0)">필요 저축액 계산</button>
+  <button class="tab" onclick="switchTab(1)">은퇴 가능 시점</button>
+  <button class="tab" onclick="switchTab(2)">Social Security</button>
+</div>
+
+<!-- TAB 0 -->
+<div class="panel active" id="panel0">
+  <div class="section-label">은퇴 후 예상 지출 항목 <span class="currency-badge" id="cur-badge0">USD · $</span></div>
+  <table class="expense-table">
+    <thead><tr><th style="width:4%"></th><th style="width:34%">항목</th><th style="width:22%">금액 <span id="col-unit">(USD)</span></th><th style="width:16%">주기</th><th style="width:20%;text-align:right">연간 환산</th><th style="width:4%"></th></tr></thead>
+    <tbody id="expense-body"></tbody>
+  </table>
+  <button class="add-btn" onclick="addRow()">+ 항목 추가</button>
+  <div class="total-row"><span class="total-label">현재 기준 연간 지출 합계</span><span class="total-value" id="total-annual">0</span></div>
+  <div class="total-row" style="border-top:none;padding-top:2px;"><span class="total-label" style="color:var(--color-text-tertiary)">월 평균</span><span style="font-size:13px;color:var(--color-text-tertiary)" id="total-monthly">0 / 월</span></div>
+  <div class="section-divider"></div>
+  <div class="row2">
+    <div class="field"><label>현재 나이 (세)</label><input type="number" id="p1_current_age" value="40"></div>
+    <div class="field"><label>은퇴 예정 나이 (세)</label><input type="number" id="p1_retire_age" value="45"></div>
+  </div>
+  <div id="ss-notice" style="display:none;margin-bottom:10px;">
+    <div style="font-size:13px;padding:8px 12px;background:rgba(29,158,117,0.06);border:0.5px solid rgba(29,158,117,0.25);border-radius:var(--border-radius-md);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-weight:500;">Social Security 반영 중</span><button onclick="removeSS()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--color-text-tertiary);font-family:var(--font-sans);">제거</button></div>
+      <div id="ss-notice-detail" style="font-size:12px;color:var(--color-text-secondary);line-height:1.7;white-space:pre-line;"></div>
+    </div>
+  </div>
+  <div class="assump-box">
+    <div class="assump-title">기본 가정값</div>
+    <div class="row3" style="margin-bottom:10px">
+      <div class="field"><label>평균 수명 (세)</label><input type="number" id="a_lifespan" value="85"></div>
+      <div class="field"><label>실질 투자 수익률 (%/년)</label><input type="number" id="a_return" value="6" step="0.1"></div>
+      <div class="field"><label>물가 상승률 (%/년)</label><input type="number" id="a_inflation" value="2.5" step="0.1"></div>
+    </div>
+    <div style="border-top:0.5px solid var(--color-border-tertiary);padding-top:10px;">
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:6px;">
+          사망 시 남길 재산 (유산 목표)
+          <span style="font-size:11px;color:var(--color-text-tertiary);font-weight:400;">0 = 전부 소진</span>
+        </label>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="number" id="a_legacy" value="0" min="0" placeholder="0" style="flex:1;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--color-text-secondary);white-space:nowrap;cursor:pointer;">
+            <input type="checkbox" id="a_legacy_real" style="width:auto;cursor:pointer;"> 물가 반영
+          </label>
+        </div>
+        <span class="hint" id="a_legacy_hint" style="display:none;"></span>
+      </div>
+    </div>
+  </div>
+  <button class="calc-btn" onclick="calc1()">계산하기</button>
+  <div id="result1" style="display:none">
+    <div class="result-box"><div class="result-label" id="r1_label"></div><div class="result-value" id="r1_total"></div><div class="result-sub" id="r1_sub"></div></div>
+    <div class="result-grid">
+      <div class="result-card"><div class="result-label">은퇴 후 지출 기간</div><div style="font-size:18px;font-weight:500" id="r1_years"></div></div>
+      <div class="result-card"><div class="result-label" id="r1_alabel"></div><div style="font-size:18px;font-weight:500" id="r1_annual"></div></div>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title">은퇴 후 재산 변화</div>
+      <div class="chart-sub" id="chart-sub"></div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#378ADD"></div>남은 자산</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div>연간 생활비 (물가 반영)</div>
+        <div class="legend-item" id="ss-legend" style="display:none"><div class="legend-dot" style="background:#EF9F27"></div>SS 합산 수령액</div>
+        <div class="legend-item" id="legacy-legend" style="display:none"><div style="width:20px;height:0;border-top:2px dashed #9B59B6;margin-right:2px;"></div>유산 목표</div>
+      </div>
+      <canvas id="retireChart" height="220"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 1 -->
+<div class="panel" id="panel1">
+  <div class="section-label" style="margin-bottom:12px;">은퇴 가능 시점 계산 <span class="currency-badge" id="cur-badge1">USD · $</span></div>
+
+  <!-- 현재 재산 / 저축 -->
+  <div class="row2">
+    <div class="field"><label>현재 나이 (세)</label><input type="number" id="p2_age" value="40"></div>
+    <div class="field"><label>현재 자산 총액</label><input type="number" id="p2_current" value="200000"></div>
+  </div>
+  <div class="row2">
+    <div class="field"><label>연간 저축액</label><input type="number" id="p2_annual" value="30000"></div>
+    <div class="field">
+      <label>은퇴 전 투자 수익률 (%/년)</label>
+      <input type="number" id="p2_prereturn" value="7" step="0.1">
+      <span class="hint" style="font-size:11px;color:var(--color-text-tertiary);">자산 증식 수익률 (은퇴 전)</span>
+    </div>
+  </div>
+
+  <div class="section-divider"></div>
+
+  <!-- 탭0 공유 항목 요약 -->
+  <div class="section-label">탭 1 설정 공유 중</div>
+  <div class="assump-box" style="margin-top:0;">
+    <div class="row2" style="margin-bottom:8px;">
+      <div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:3px;">현재 기준 연간 지출</div>
+        <div style="font-size:15px;font-weight:500;" id="p2_ann_display">—</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:3px;">월 평균</div>
+        <div style="font-size:15px;font-weight:500;" id="p2_mon_display">—</div>
+      </div>
+    </div>
+    <div style="border-top:0.5px solid var(--color-border-tertiary);padding-top:8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:2px;">평균 수명</div>
+        <div style="font-size:13px;font-weight:500;" id="p2_shared_ls">—</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:2px;">은퇴 후 수익률</div>
+        <div style="font-size:13px;font-weight:500;" id="p2_shared_r">—</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:2px;">물가 상승률</div>
+        <div style="font-size:13px;font-weight:500;" id="p2_shared_inf">—</div>
+      </div>
+    </div>
+    <div id="p2_shared_legacy_row" style="border-top:0.5px solid var(--color-border-tertiary);padding-top:8px;margin-top:8px;display:none;">
+      <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:2px;">유산 목표</div>
+      <div style="font-size:13px;font-weight:500;" id="p2_shared_legacy">—</div>
+    </div>
+    <div id="ss-notice2" style="display:none;margin-top:8px;border-top:0.5px solid var(--color-border-tertiary);padding-top:8px;">
+      <div style="font-size:12px;color:#1D9E75;font-weight:500;margin-bottom:2px;">Social Security 반영 중</div>
+      <div id="ss-notice2-detail" style="font-size:12px;color:var(--color-text-secondary);line-height:1.7;white-space:pre-line;"></div>
+    </div>
+  </div>
+
+  <button class="calc-btn" onclick="calc2()">계산하기</button>
+
+  <div id="result2" style="display:none">
+    <div class="result-box">
+      <div class="result-label">은퇴 가능 시점</div>
+      <div class="result-value" id="r2_age"></div>
+      <div class="result-sub" id="r2_sub"></div>
+    </div>
+    <div class="result-grid">
+      <div class="result-card"><div class="result-label">지금부터 남은 기간</div><div style="font-size:18px;font-weight:500" id="r2_left"></div></div>
+      <div class="result-card"><div class="result-label">은퇴 시점 예상 자산</div><div style="font-size:18px;font-weight:500" id="r2_final"></div></div>
+    </div>
+    <div class="result-grid" style="margin-top:0">
+      <div class="result-card"><div class="result-label">은퇴 시점 필요 저축액</div><div style="font-size:18px;font-weight:500" id="r2_needed"></div></div>
+      <div class="result-card"><div class="result-label">은퇴 첫 해 연간 지출</div><div style="font-size:18px;font-weight:500" id="r2_firstexp"></div></div>
+    </div>
+    <div id="r2_warn" style="display:none;font-size:13px;color:var(--color-text-secondary);margin-top:1rem;padding:10px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);border-left:2px solid var(--color-border-secondary);"></div>
+
+    <div class="chart-wrap">
+      <div class="chart-title">은퇴 후 재산 변화</div>
+      <div class="chart-sub" id="chart-sub2"></div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#378ADD"></div>남은 자산</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div>연간 생활비 (물가 반영)</div>
+        <div class="legend-item" id="ss-legend2" style="display:none"><div class="legend-dot" style="background:#EF9F27"></div>SS 합산 수령액</div>
+        <div class="legend-item" id="legacy-legend2" style="display:none"><div style="width:20px;height:0;border-top:2px dashed #9B59B6;margin-right:2px;"></div>유산 목표</div>
+      </div>
+      <canvas id="retireChart2" height="220"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 2 -->
+<div class="panel" id="panel2">
+  <div class="ptabs">
+    <button class="ptab active" onclick="switchPerson(0)">본인</button>
+    <button class="ptab" onclick="switchPerson(1)">배우자</button>
+  </div>
+  <div class="ppanel active" id="ppanel-0">
+    <div class="row2" style="margin-bottom:8px;">
+      <div class="field"><label>현재 나이 (세)</label><input type="number" id="p0_cur" value="40" oninput="rebuildChart(0)"></div>
+      <div class="field"><label>출생 연도</label><input type="number" id="p0_by" value="1985" oninput="updateHint(0)"></div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <label style="font-size:13px;color:var(--color-text-secondary);white-space:nowrap;">경력 시작</label>
+        <select id="p0_mode" onchange="toggleMode(0)" style="padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;background:var(--color-background-primary);color:var(--color-text-primary);font-family:var(--font-sans);"><option value="year" selected>연도로 입력</option><option value="age">나이로 입력</option></select>
+      </div>
+      <div class="row2" style="margin-bottom:0;">
+        <div class="field" id="p0_yf"><label>경력 시작 연도</label><input type="number" id="p0_sy" value="2020" oninput="syncMode(0,'year');rebuildChart(0)"></div>
+        <div class="field" id="p0_af" style="display:none;"><label>경력 시작 나이</label><input type="number" id="p0_sa" value="34" oninput="syncMode(0,'age');rebuildChart(0)"></div>
+        <div class="field"><label>은퇴 나이 (세)</label><input type="number" id="p0_end" value="43" oninput="rebuildChart(0)"></div>
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:14px;">
+      <label>SS 수령 시작 나이 (세)</label>
+      <input type="number" id="p0_ca" value="67" min="62" max="70" oninput="updateHint(0)">
+      <span class="hint" id="p0_hint"></span>
+    </div>
+    <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:4px;">연도별 소득 입력</div>
+    <div class="cap-leg"><div class="cap-leg-line"></div>연도별 SS 과세 상한</div>
+    <div style="position:relative;width:100%;user-select:none;touch-action:none;">
+      <canvas class="income-canvas" id="ic-0" height="240"></canvas>
+      <div class="drag-tip" id="dt-0"></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="sl">드래그 중인 연도 소득</div><div class="sv" id="sh-0">—</div></div>
+      <div class="stat"><div class="sl">평균 연봉</div><div class="sv" id="sa-0">—</div></div>
+      <div class="stat"><div class="sl">SS 상한 도달 연도</div><div class="sv" id="sc-0">—</div></div>
+    </div>
+    <button class="calc-btn" style="margin-top:1rem;" onclick="calcSS(0)">본인 SS 추정하기</button>
+    <div id="ssr-0" style="display:none">
+      <div class="ss-banner"><div style="font-size:12px;color:#1D9E75;margin-bottom:4px;">본인 예상 월 수령액</div><div style="font-size:24px;font-weight:500;" id="ssv-0"></div><div style="font-size:12px;color:var(--color-text-tertiary);margin-top:5px;line-height:1.7;white-space:pre-line;" id="sss-0"></div></div>
+      <div class="result-grid" style="margin-top:10px;">
+        <div class="result-card"><div class="result-label">Full Retirement Age</div><div style="font-size:16px;font-weight:500" id="fra-0"></div></div>
+        <div class="result-card"><div class="result-label">조기/지연 조정</div><div style="font-size:16px;font-weight:500" id="adj-0"></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="ppanel" id="ppanel-1">
+    <div class="row2" style="margin-bottom:8px;">
+      <div class="field"><label>현재 나이 (세)</label><input type="number" id="p1_cur" value="40" oninput="rebuildChart(1)"></div>
+      <div class="field"><label>출생 연도</label><input type="number" id="p1_by" value="1985" oninput="updateHint(1)"></div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <label style="font-size:13px;color:var(--color-text-secondary);white-space:nowrap;">경력 시작</label>
+        <select id="p1_mode" onchange="toggleMode(1)" style="padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;background:var(--color-background-primary);color:var(--color-text-primary);font-family:var(--font-sans);"><option value="year" selected>연도로 입력</option><option value="age">나이로 입력</option></select>
+      </div>
+      <div class="row2" style="margin-bottom:0;">
+        <div class="field" id="p1_yf"><label>경력 시작 연도</label><input type="number" id="p1_sy" value="2018" oninput="syncMode(1,'year');rebuildChart(1)"></div>
+        <div class="field" id="p1_af" style="display:none;"><label>경력 시작 나이</label><input type="number" id="p1_sa" value="32" oninput="syncMode(1,'age');rebuildChart(1)"></div>
+        <div class="field"><label>은퇴 나이 (세)</label><input type="number" id="p1_end" value="45" oninput="rebuildChart(1)"></div>
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:14px;">
+      <label>SS 수령 시작 나이 (세)</label>
+      <input type="number" id="p1_ca" value="67" min="62" max="70" oninput="updateHint(1)">
+      <span class="hint" id="p1_hint"></span>
+    </div>
+    <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:4px;">연도별 소득 입력</div>
+    <div class="cap-leg"><div class="cap-leg-line"></div>연도별 SS 과세 상한</div>
+    <div style="position:relative;width:100%;user-select:none;touch-action:none;">
+      <canvas class="income-canvas" id="ic-1" height="240"></canvas>
+      <div class="drag-tip" id="dt-1"></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="sl">드래그 중인 연도 소득</div><div class="sv" id="sh-1">—</div></div>
+      <div class="stat"><div class="sl">평균 연봉</div><div class="sv" id="sa-1">—</div></div>
+      <div class="stat"><div class="sl">SS 상한 도달 연도</div><div class="sv" id="sc-1">—</div></div>
+    </div>
+    <button class="calc-btn" style="margin-top:1rem;" onclick="calcSS(1)">배우자 SS 추정하기</button>
+    <div id="ssr-1" style="display:none">
+      <div class="ss-banner"><div style="font-size:12px;color:#1D9E75;margin-bottom:4px;">배우자 예상 월 수령액</div><div style="font-size:24px;font-weight:500;" id="ssv-1"></div><div style="font-size:12px;color:var(--color-text-tertiary);margin-top:5px;line-height:1.7;white-space:pre-line;" id="sss-1"></div></div>
+      <div class="result-grid" style="margin-top:10px;">
+        <div class="result-card"><div class="result-label">Full Retirement Age</div><div style="font-size:16px;font-weight:500" id="fra-1"></div></div>
+        <div class="result-card"><div class="result-label">조기/지연 조정</div><div style="font-size:16px;font-weight:500" id="adj-1"></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="apply-box" id="apply-box" style="display:none">
+    <div class="title">필요 저축액 계산에 반영할 SS 수령액</div>
+    <div class="arow" id="ar-0" style="display:none"><span style="font-size:13px;color:var(--color-text-secondary);" id="al-0">본인</span><span style="font-size:13px;font-weight:500;" id="av-0">—</span></div>
+    <div class="arow" id="ar-1" style="display:none"><span style="font-size:13px;color:var(--color-text-secondary);" id="al-1">배우자</span><span style="font-size:13px;font-weight:500;" id="av-1">—</span></div>
+    <div class="atotal"><span style="font-size:13px;font-weight:500;">합산 월 수령액</span><span style="font-size:15px;font-weight:500;color:#1D9E75;" id="atotal">—</span></div>
+    <button class="apply-btn" id="apply-btn" onclick="applySSToCalc()">필요 저축액 계산에 반영하기 →</button>
+    <div style="font-size:12px;color:var(--color-text-tertiary);text-align:center;margin-top:6px;">각자의 수령 시작 나이부터 생활비에서 차감해서 계산해요</div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// CURRENCY CONFIG
+// ─────────────────────────────────────────────
+const CURRENCIES = {
+  USD:  { symbol: '$',  code: 'USD', locale: 'en-US', name: '미국 달러', decimals: 0 },
+  EUR:  { symbol: '€',  code: 'EUR', locale: 'de-DE', name: '유로',      decimals: 0 },
+  GBP:  { symbol: '£',  code: 'GBP', locale: 'en-GB', name: '영국 파운드', decimals: 0 },
+  JPY:  { symbol: '¥',  code: 'JPY', locale: 'ja-JP', name: '일본 엔',   decimals: 0 },
+  CNY:  { symbol: '¥',  code: 'CNY', locale: 'zh-CN', name: '중국 위안', decimals: 0 },
+  KRW:  { symbol: '₩',  code: 'KRW', locale: 'ko-KR', name: '한국 원',   decimals: 0 },
+  NONE: { symbol: '',   code: '',    locale: 'en-US', name: '단위 없음',  decimals: 0 },
+};
+let CUR = CURRENCIES['USD'];
+
+function onCurrencyChange() {
+  const sel = document.getElementById('currency-select').value;
+  CUR = CURRENCIES[sel];
+  // update preview
+  const prev = document.getElementById('currency-preview');
+  prev.textContent = `예: ${fmt(1200)} / ${fmt(50000)}`;
+  // update badge & column header
+  const badge = sel === 'NONE' ? '단위 없음' : `${sel} · ${CUR.symbol}`;
+  ['cur-badge0','cur-badge1'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = badge;
+  });
+  document.getElementById('col-unit').textContent = sel === 'NONE' ? '' : `(${sel})`;
+  // refresh totals
+  updateTotal();
+}
+
+// Format a number with current currency
+function fmt(n) {
+  const rounded = Math.round(n);
+  const formatted = Math.abs(rounded).toLocaleString(CUR.locale);
+  if (CUR.symbol === '') return formatted;
+  // prefix symbols
+  if (['$','€','£','¥','₩'].includes(CUR.symbol)) {
+    return (n < 0 ? '-' : '') + CUR.symbol + formatted;
+  }
+  return (n < 0 ? '-' : '') + CUR.symbol + formatted;
+}
+
+// Compact format for charts (K / M / B etc)
+function fk(n) {
+  const sym = CUR.symbol;
+  const abs = Math.abs(n);
+  let str;
+  if (abs >= 1e9)       str = (n/1e9).toFixed(2) + 'B';
+  else if (abs >= 1e8)  str = (n/1e8).toFixed(1) + '억';  // KRW friendly
+  else if (abs >= 1e6)  str = (n/1e6).toFixed(2) + 'M';
+  else if (abs >= 1000) str = Math.round(n/1000) + 'K';
+  else                  str = Math.round(n).toString();
+  return sym + str;
+}
+
+// ─────────────────────────────────────────────
+// SS WAGE BASE TABLE
+// ─────────────────────────────────────────────
+const WB={1975:14100,1976:15300,1977:16500,1978:17700,1979:22900,1980:25900,1981:29700,1982:32400,1983:35700,1984:37800,1985:39600,1986:42000,1987:43800,1988:45000,1989:48000,1990:51300,1991:53400,1992:55500,1993:57600,1994:60600,1995:61200,1996:62700,1997:65400,1998:68400,1999:72600,2000:76200,2001:80400,2002:84900,2003:87000,2004:87900,2005:90000,2006:94200,2007:97500,2008:102000,2009:106800,2010:106800,2011:106800,2012:110100,2013:113700,2014:117000,2015:118500,2016:118500,2017:127200,2018:128400,2019:132900,2020:137700,2021:142800,2022:147000,2023:160200,2024:168600,2025:176100};
+function cap(yr){if(yr>=2025)return WB[2025];if(yr<=1975)return WB[1975];return WB[yr]||WB[2024];}
+
+const CM=200000,CY=new Date().getFullYear();
+const D0=[[28000],[120000],[120000],[125000],[125000],[140000],[140000],[140000],[145000],[40000]];
+const D1=[[100000],[130000],[130000],[140000],[140000],[160000],[160000],[176100],[176100],[176100],[176100],[176100],[176100],[176100]];
+const PS=[{d:[],ci:null,dr:false,di:-1,res:null},{d:[],ci:null,dr:false,di:-1,res:null}];
+let ASS=[null,null],RDS=null,rowSrc=null;
+
+function gA(){
+  const ls=parseFloat(document.getElementById('a_lifespan').value)||85,r=parseFloat(document.getElementById('a_return').value)/100||0.06,inf=parseFloat(document.getElementById('a_inflation').value)/100||0.025;
+  const legacyNom=parseFloat(document.getElementById('a_legacy').value)||0,legacyReal=document.getElementById('a_legacy_real').checked;
+  // update hint
+  const hint=document.getElementById('a_legacy_hint');
+  if(legacyNom>0){
+    hint.style.display='block';
+    hint.textContent=legacyReal
+      ? `현재 가치 기준 — 사망 시점(현재→사망 전체 기간)까지 물가상승률 적용해서 계산해요`
+      : `사망 시점에 명목으로 정확히 ${fmt(legacyNom)} 남기는 것으로 계산해요`;
+  }else{hint.style.display='none';}
+  return{ls,r,inf,legacyNom,legacyReal};
+}
+function ta(a,p){return p==='monthly'?a*12:a;}
+function fra(by){if(by<=1937)return 65;if(by<=1942)return 65+(by-1937)*2/12;if(by<=1954)return 66;if(by<=1959)return 66+(by-1954)*2/12;return 67;}
+function a2y(p,age){const c=parseInt(document.getElementById(p===0?'p0_cur':'p1_cur').value)||40;return CY+(age-c);}
+function gCur(p){return parseInt(document.getElementById(p===0?'p0_cur':'p1_cur').value)||40;}
+function gEnd(p){return parseInt(document.getElementById(p===0?'p0_end':'p1_end').value)||(p===0?43:45);}
+function gSY(p){const mode=document.getElementById(p===0?'p0_mode':'p1_mode').value;if(mode==='year'){return parseInt(document.getElementById(p===0?'p0_sy':'p1_sy').value)||(p===0?2020:2018);}const age=parseInt(document.getElementById(p===0?'p0_sa':'p1_sa').value)||(p===0?34:32);return CY-(gCur(p)-age);}
+function gSA(p){return gCur(p)-(CY-gSY(p));}
+
+function updateHint(p){
+  const by=parseInt(document.getElementById(p===0?'p0_by':'p1_by').value)||1985,ca=parseFloat(document.getElementById(p===0?'p0_ca':'p1_ca').value)||67,f=fra(by);
+  const fs=Number.isInteger(f)?f+'세':Math.floor(f)+'세 '+Math.round((f%1)*12)+'개월';
+  let l2;
+  if(ca<f){const m=Math.round((f-ca)*12),f36=Math.min(m,36),b36=Math.max(m-36,0);l2=`현재 선택: 조기 수령 → 약 ${((f36*5/9+b36*5/12)/100*100).toFixed(1)}% 감소`;}
+  else if(ca>f){l2=`현재 선택: 지연 수령 → 약 ${(Math.min(ca-f,3)*8).toFixed(0)}% 증가`;}
+  else{l2='현재 선택: Full Retirement Age 기준 (100% 수령)';}
+  document.getElementById(p===0?'p0_hint':'p1_hint').textContent=`FRA는 ${fs}이에요. 62세 조기(감액) ~ 70세 지연(증액) 가능.\n${l2}`;
+}
+function toggleMode(p){const m=document.getElementById(p===0?'p0_mode':'p1_mode').value;document.getElementById(p===0?'p0_yf':'p1_yf').style.display=m==='year'?'block':'none';document.getElementById(p===0?'p0_af':'p1_af').style.display=m==='age'?'block':'none';}
+function syncMode(p,from){const c=gCur(p);if(from==='year'){const yr=parseInt(document.getElementById(p===0?'p0_sy':'p1_sy').value);document.getElementById(p===0?'p0_sa':'p1_sa').value=c-(CY-yr);}else{const age=parseInt(document.getElementById(p===0?'p0_sa':'p1_sa').value);document.getElementById(p===0?'p0_sy':'p1_sy').value=CY-(c-age);}}
+
+function rebuildChart(p,useDefault){
+  updateHint(p);
+  const sa=gSA(p),end=gEnd(p),e=Math.max(end,sa+1),old={};
+  PS[p].d.forEach(x=>{old[x.age]=x.income;});PS[p].d=[];
+  const tot=e-sa+1,def=p===0?D0:D1;
+  for(let i=0;i<tot;i++){const age=sa+i,c=cap(a2y(p,age));let inc;if(useDefault&&def[i]!==undefined){inc=Math.min(def[i][0],c);}else if(old[age]!==undefined){inc=Math.min(old[age],c);}else{const f=tot<=1?0.5:i/(tot-1);inc=f<0.33?60000:f<0.66?100000:140000;}PS[p].d.push({age,income:inc});}
+  renderIC(p);updateStats(p,-1);
+}
+function renderIC(p){
+  const d=PS[p].d,labels=d.map(x=>[x.age+'세',a2y(p,x.age)+'년']),vals=d.map(x=>x.income),caps=d.map(x=>cap(a2y(p,x.age))),cols=d.map((x,i)=>x.income>=caps[i]?'#BA7517':'#378ADD');
+  if(PS[p].ci)PS[p].ci.destroy();
+  const ctx=document.getElementById(`ic-${p}`).getContext('2d');
+  PS[p].ci=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data:vals,backgroundColor:cols,borderColor:cols,borderWidth:0,borderRadius:3,borderSkipped:false,order:2},{data:caps,type:'line',borderColor:'#EF9F27',borderWidth:1.5,borderDash:[5,4],pointRadius:0,fill:false,tension:0.3,order:1}]},options:{responsive:true,animation:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{ticks:{color:'rgba(128,128,128,0.6)',font:{size:10},maxRotation:0,callback:function(v,i){const n=d.length;if(n<=12||i===0||i===n-1||i%Math.ceil(n/10)===0){const x=d[i];return x?[x.age+'세',a2y(p,x.age)+'년']:'';}return '';}},grid:{display:false}},y:{min:0,max:CM,ticks:{color:'rgba(128,128,128,0.6)',font:{size:10},callback:v=>'$'+(v/1000)+'K',afterBuildTicks:a=>{a.ticks=[0,50000,100000,150000,200000].map(v=>({value:v}));}},grid:{color:'rgba(128,128,128,0.08)'}}}}});
+  setupDrag(p);
+}
+function gBI(p,cx){const cv=document.getElementById(`ic-${p}`),r=cv.getBoundingClientRect(),x=cx-r.left,ca=PS[p].ci.chartArea,n=PS[p].d.length;if(!n||x<ca.left||x>ca.right)return -1;return Math.min(Math.floor((x-ca.left)/((ca.right-ca.left)/n)),n-1);}
+function gBX(p,i){const ca=PS[p].ci.chartArea,n=PS[p].d.length,w=(ca.right-ca.left)/n;return ca.left+w*i+w/2;}
+function iFromY(p,i,cy){const cv=document.getElementById(`ic-${p}`),r=cv.getBoundingClientRect(),ca=PS[p].ci.chartArea,ratio=1-(cy-r.top-ca.top)/(ca.bottom-ca.top),s=Math.round(ratio*CM/10000)*10000,c=cap(a2y(p,PS[p].d[i].age));return Math.max(0,Math.min(c,s));}
+function doDrag(p,cx,cy){
+  const i=PS[p].di;if(i<0||i>=PS[p].d.length)return;
+  const ni=iFromY(p,i,cy),c=cap(a2y(p,PS[p].d[i].age)),atCap=ni>=c,col=atCap?'#BA7517':'#378ADD';
+  PS[p].d[i].income=ni;PS[p].ci.data.datasets[0].data[i]=ni;PS[p].ci.data.datasets[0].backgroundColor[i]=col;PS[p].ci.data.datasets[0].borderColor[i]=col;PS[p].ci.update('none');
+  const cv=document.getElementById(`ic-${p}`),tip=document.getElementById(`dt-${p}`),ar=cv.parentElement.getBoundingClientRect(),cr=cv.getBoundingClientRect();
+  const bx=cr.left-ar.left+gBX(p,i),ca=PS[p].ci.chartArea,by=cr.top-ar.top+ca.top+(ca.bottom-ca.top)*(1-ni/CM);
+  tip.style.display='block';tip.style.left=bx+'px';tip.style.top=Math.max(0,by-36)+'px';
+  tip.className='drag-tip'+(atCap?' cap':'');tip.textContent=atCap?'상한 $'+Math.round(c).toLocaleString('en-US'):'$'+Math.round(ni).toLocaleString('en-US');
+  updateStats(p,i);
+}
+function setupDrag(p){
+  const cv=document.getElementById(`ic-${p}`);
+  function s(cx,cy){const i=gBI(p,cx);if(i<0)return;PS[p].dr=true;PS[p].di=i;doDrag(p,cx,cy);}
+  function m(cx,cy){if(PS[p].dr){doDrag(p,cx,cy);}else{updateStats(p,gBI(p,cx));}}
+  function e(){PS[p].dr=false;PS[p].di=-1;document.getElementById(`dt-${p}`).style.display='none';updateStats(p,-1);}
+  cv.onmousedown=ev=>s(ev.clientX,ev.clientY);cv.onmousemove=ev=>{if(!PS[p].dr)m(ev.clientX,ev.clientY);};cv.onmouseleave=()=>{if(!PS[p].dr)updateStats(p,-1);};
+  cv.ontouchstart=ev=>{ev.preventDefault();const t=ev.touches[0];s(t.clientX,t.clientY);};cv.ontouchmove=ev=>{ev.preventDefault();const t=ev.touches[0];m(t.clientX,t.clientY);};cv.ontouchend=e;
+  const mmk=`_mm${p}`,muk=`_mu${p}`;if(window[mmk])window.removeEventListener('mousemove',window[mmk]);if(window[muk])window.removeEventListener('mouseup',window[muk]);
+  window[mmk]=ev=>{if(PS[p].dr)m(ev.clientX,ev.clientY);};window[muk]=e;window.addEventListener('mousemove',window[mmk]);window.addEventListener('mouseup',window[muk]);
+}
+function updateStats(p,hi){
+  const d=PS[p].d;if(!d.length)return;
+  const avg=d.reduce((s,x)=>s+x.income,0)/d.length,capped=d.filter(x=>x.income>=cap(a2y(p,x.age))).length;
+  // SS income chart stays in USD (SS is US-specific), but we still use fmt for stats display
+  document.getElementById(`sa-${p}`).textContent='$'+Math.round(avg).toLocaleString('en-US');
+  document.getElementById(`sc-${p}`).textContent=capped>0?capped+'년':'없음';
+  if(hi>=0&&hi<d.length){const x=d[hi],c=cap(a2y(p,x.age));document.getElementById(`sh-${p}`).textContent='$'+Math.round(x.income).toLocaleString('en-US')+(x.income>=c?' (상한)':'');}
+  else{document.getElementById(`sh-${p}`).textContent='—';}
+}
+
+function calcSS(p){
+  const by=parseInt(document.getElementById(p===0?'p0_by':'p1_by').value)||1985,ca=parseFloat(document.getElementById(p===0?'p0_ca':'p1_ca').value)||67;
+  const earn=PS[p].d.map(x=>Math.min(x.income,cap(a2y(p,x.age)))),pad=[...earn];while(pad.length<35)pad.push(0);pad.sort((a,b)=>b-a);
+  const aime=pad.slice(0,35).reduce((s,v)=>s+v,0)/35/12,pia=aime<=1174?aime*0.9:aime<=7078?1174*0.9+(aime-1174)*0.32:1174*0.9+(7078-1174)*0.32+(aime-7078)*0.15;
+  const f=fra(by),diff=ca-f;let adj;
+  if(diff>=0){adj=pia*(1+0.08*Math.min(diff,3));}else{const em=Math.round(Math.abs(diff)*12),f36=Math.min(em,36),b36=Math.max(em-36,0);adj=pia*(1-(f36*5/9+b36*5/12)/100);}
+  const pct=((adj/pia-1)*100).toFixed(1),sign=parseFloat(pct)>=0?'+':'';
+  PS[p].res={monthly:adj,claimAge:ca};
+  // SS is always in USD
+  const fmtUSD=v=>'$'+Math.round(v).toLocaleString('en-US');
+  document.getElementById(`ssv-${p}`).textContent=fmtUSD(adj)+' / 월';
+  document.getElementById(`sss-${p}`).textContent=`AIME: ${fmtUSD(aime)} / 월   |   PIA(FRA ${f.toFixed(1)}세): ${fmtUSD(pia)} / 월\n${ca}세 수령 조정 후: ${fmtUSD(adj)} / 월 (${sign}${pct}%)\n※ 현재(${CY}년) 달러 기준 추정값. 실제 수령액은 매년 COLA(물가연동) 반영돼 증가해요.`;
+  document.getElementById(`fra-${p}`).textContent=Number.isInteger(f)?f+'세':Math.floor(f)+'세 '+Math.round((f%1)*12)+'개월';
+  document.getElementById(`adj-${p}`).textContent=sign+pct+'%';
+  document.getElementById(`ssr-${p}`).style.display='block';updateApplyBox();
+}
+function updateApplyBox(){
+  const box=document.getElementById('apply-box');if(!PS[0].res&&!PS[1].res){box.style.display='none';return;}
+  box.style.display='block';let total=0;
+  const fmtUSD=v=>'$'+Math.round(v).toLocaleString('en-US');
+  [[0,'본인'],[1,'배우자']].forEach(([p,label])=>{const r=PS[p].res,row=document.getElementById(`ar-${p}`);if(r){row.style.display='flex';document.getElementById(`al-${p}`).textContent=`${label} (${r.claimAge}세부터)`;document.getElementById(`av-${p}`).textContent=fmtUSD(r.monthly)+' / 월';total+=r.monthly;}else{row.style.display='none';}});
+  document.getElementById('atotal').textContent=fmtUSD(total)+' / 월';
+  const btn=document.getElementById('apply-btn');btn.classList.remove('applied');btn.textContent='필요 저축액 계산에 반영하기 →';
+}
+function applySSToCalc(){
+  ASS=[PS[0].res?{monthly:PS[0].res.monthly,claimAge:PS[0].res.claimAge}:null,PS[1].res?{monthly:PS[1].res.monthly,claimAge:PS[1].res.claimAge}:null];
+  document.getElementById('apply-btn').classList.add('applied');document.getElementById('apply-btn').textContent='✓ 반영 완료 — 탭 1에서 계산하기를 눌러주세요';
+  const n=document.getElementById('ss-notice');n.style.display='block';
+  const fmtUSD=v=>'$'+Math.round(v).toLocaleString('en-US');
+  let lines=[];if(ASS[0])lines.push(`본인: ${fmtUSD(ASS[0].monthly)}/월 (${ASS[0].claimAge}세부터)`);if(ASS[1])lines.push(`배우자: ${fmtUSD(ASS[1].monthly)}/월 (${ASS[1].claimAge}세부터)`);lines.push(`합산: ${fmtUSD((ASS[0]?.monthly||0)+(ASS[1]?.monthly||0))}/월`);
+  document.getElementById('ss-notice-detail').textContent=lines.join('\n');switchTab(0);
+}
+function removeSS(){ASS=[null,null];document.getElementById('ss-notice').style.display='none';document.getElementById('ss-legend').style.display='none';}
+
+// legacyAtDeath: 사망 시점 명목 금액
+// realAnn: 은퇴 첫 해 연간 생활비 (물가 이미 반영된 값)
+// inf: 물가상승률 (연)
+function simAsset(needed, ly, realAnn, r, inf, ssE, rAge, legacyAtDeath) {
+  legacyAtDeath = legacyAtDeath || 0;
+  let asset = needed;
+  const yr = [Math.round(asset)]; // 은퇴 시점 (y=0)
+  for (let y = 0; y < ly; y++) {
+    const expense = realAnn * Math.pow(1 + inf, y);   // 이 해의 생활비 (물가 반영)
+    // SS도 매년 COLA(물가상승률)만큼 증가
+    let ssIncome = 0;
+    ssE.forEach(e => {
+      if (e && (rAge + y) >= e.claimAge)
+        ssIncome += e.monthlyAtRetire * 12 * Math.pow(1 + inf, y);
+    });
+    const net = expense - ssIncome;
+    asset = asset * (1 + r) - net;
+    if (y === ly - 1) asset = Math.max(legacyAtDeath, asset);
+    else              asset = Math.max(0, asset);
+    yr.push(Math.round(asset));
+  }
+  return yr;
+}
+
+function calcNeeded(realAnn, ly, r, inf, ssE, rAge, legacyAtDeath) {
+  legacyAtDeath = legacyAtDeath || 0;
+  let pv = 0;
+  for (let y = 0; y < ly; y++) {
+    const expense = realAnn * Math.pow(1 + inf, y);
+    // SS COLA 반영: 수령 시작 이후 매년 물가상승률만큼 증가
+    let ssIncome = 0;
+    ssE.forEach(e => {
+      if (e && (rAge + y) >= e.claimAge)
+        ssIncome += e.monthlyAtRetire * 12 * Math.pow(1 + inf, y);
+    });
+    const net = expense - ssIncome;
+    pv += net / Math.pow(1 + r, y + 1);
+  }
+  const pvLegacy = legacyAtDeath / Math.pow(1 + r, ly);
+  return Math.max(0, pv + pvLegacy);
+}
+
+function drawRC(needed,rYear,rAge,realAnn,a,ssE,legacyAtDeath){
+  const ly=a.ls-rAge;
+  const aD=simAsset(needed,ly,realAnn,a.r,a.inf,ssE,rAge,legacyAtDeath);
+  const labels=[],eD=[],sD=[],legD=[];
+  const showLeg=legacyAtDeath>0;
+  for(let y=0;y<=ly;y++){
+    labels.push(`${rYear+y} (${rAge+y}세)`);
+    eD.push(Math.round(realAnn*Math.pow(1+a.inf,y)));
+    // SS도 COLA 반영 (매년 물가상승률만큼 증가)
+    let ss=0;ssE.forEach(e=>{if(e&&(rAge+y)>=e.claimAge)ss+=e.monthlyAtRetire*12*Math.pow(1+a.inf,y);});
+    sD.push(ss>0?Math.round(ss):null);
+    legD.push(Math.round(legacyAtDeath));
+  }
+  const dk=window.matchMedia('(prefers-color-scheme:dark)').matches,tc=dk?'rgba(255,255,255,0.45)':'rgba(0,0,0,0.38)',gc=dk?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)';
+  const ds=[
+    {label:'남은 자산',data:aD,borderColor:'#378ADD',backgroundColor:'rgba(55,138,221,0.08)',borderWidth:2,pointRadius:0,pointHoverRadius:4,fill:true,tension:0.3,yAxisID:'yA'},
+    {label:'연간 생활비',data:eD,borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,0.06)',borderWidth:2,pointRadius:0,pointHoverRadius:4,fill:true,tension:0.3,yAxisID:'yA'}
+  ];
+  if(sD.some(v=>v!==null)){ds.push({label:'SS 합산',data:sD,borderColor:'#EF9F27',borderWidth:2,pointRadius:0,pointHoverRadius:4,fill:false,tension:0.3,yAxisID:'yA',spanGaps:false});document.getElementById('ss-legend').style.display='flex';}else{document.getElementById('ss-legend').style.display='none';}
+  if(showLeg){
+    ds.push({label:'유산 목표',data:legD,borderColor:'#9B59B6',borderWidth:1.5,borderDash:[6,4],pointRadius:0,fill:false,tension:0,yAxisID:'yA'});
+    document.getElementById('legacy-legend').style.display='flex';
+  } else {
+    document.getElementById('legacy-legend').style.display='none';
+  }
+  if(RDS)RDS.destroy();
+  RDS=new Chart(document.getElementById('retireChart').getContext('2d'),{type:'line',data:{labels,datasets:ds},options:{responsive:true,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{backgroundColor:dk?'#1a1a1a':'#fff',borderColor:dk?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.1)',borderWidth:1,titleColor:dk?'rgba(255,255,255,0.7)':'rgba(0,0,0,0.6)',bodyColor:dk?'rgba(255,255,255,0.9)':'rgba(0,0,0,0.85)',padding:10,callbacks:{label:i=>i.raw!==null?' '+i.dataset.label+': '+fk(i.raw):null}}},scales:{x:{ticks:{color:tc,font:{size:11},maxTicksLimit:8},grid:{color:gc}},yA:{type:'linear',position:'left',min:0,ticks:{color:tc,font:{size:11},callback:v=>fk(v)},grid:{color:gc}}}}});
+}
+
+function updateTotal(){
+  let t=0;
+  document.querySelectorAll('#expense-body tr').forEach(r=>{
+    const a=parseFloat(r.querySelector('.amt-input').value)||0,p=r.querySelector('.period-select').value,ann=ta(a,p);
+    t+=ann;
+    r.querySelector('.annual-equiv').textContent=fmt(ann);
+  });
+  document.getElementById('total-annual').textContent=fmt(t);
+  document.getElementById('total-monthly').textContent=fmt(t/12)+' / 월';
+}
+function getAT(){let t=0;document.querySelectorAll('#expense-body tr').forEach(r=>{const a=parseFloat(r.querySelector('.amt-input').value)||0;t+=ta(a,r.querySelector('.period-select').value);});return t;}
+
+function calc1(){
+  const ann=getAT();if(ann<=0){alert('지출 항목을 입력해주세요.');return;}
+  const cAge=parseFloat(document.getElementById('p1_current_age').value)||40,rAge=parseFloat(document.getElementById('p1_retire_age').value)||45,a=gA(),ly=a.ls-rAge;
+  if(ly<=0){alert('은퇴 나이가 평균 수명보다 높습니다.');return;}
+  const ytr=Math.max(rAge-cAge,0),rYear=CY+ytr,ra=ann*Math.pow(1+a.inf,ytr);
+  const ssE=[];ASS.forEach(ss=>{if(ss)ssE.push({monthlyAtRetire:ss.monthly*Math.pow(1+a.inf,ytr),claimAge:ss.claimAge});});
+  // legacy: 사망 시점 기준 명목 금액 계산
+  // 물가반영 ON  → 입력값은 "현재 가치" → 사망 시점까지 전체 기간(ytr+ly년) 인플레 적용
+  // 물가반영 OFF → 입력값이 사망 시점에 그대로 남을 명목 금액
+  let legacyAtDeath=0;
+  if(a.legacyNom>0){
+    legacyAtDeath=a.legacyReal
+      ? a.legacyNom*Math.pow(1+a.inf, ytr+ly)   // 현재→사망 전체 기간 인플레
+      : a.legacyNom;                              // 명목 그대로
+  }
+  const needed=calcNeeded(ra,ly,a.r,a.inf,ssE,rAge,legacyAtDeath);
+  let ssT=ssE.map((e,i)=>`+ ${i===0?'본인':'배우자'} SS $${Math.round(e.monthlyAtRetire).toLocaleString('en-US')}/월 (${e.claimAge}세부터)`).join('\n');
+  let legLine='';
+  if(legacyAtDeath>0){
+    legLine=a.legacyReal
+      ? `\n+ 유산 목표: 현재 가치 ${fmt(a.legacyNom)} → ${a.ls}세 시점 ${fmt(legacyAtDeath)} (${ytr+ly}년 × ${(a.inf*100).toFixed(1)}% 인플레 반영)`
+      : `\n+ 유산 목표: ${fmt(legacyAtDeath)} (${a.ls}세 시점, 명목 금액)`;
+  }
+  document.getElementById('r1_label').textContent=`${rYear}년 은퇴 시점에 필요한 저축 총액`;
+  document.getElementById('r1_total').textContent=fmt(needed);
+  document.getElementById('r1_sub').textContent=`현재(${CY}년) 기준 연 지출 ${fmt(ann)}\n→ ${rYear}년 기준 연 ${fmt(ra)} (물가상승률 ${(a.inf*100).toFixed(1)}% × ${ytr}년 반영)${ssT?'\n'+ssT:''}${legLine}\n→ 이후 ${a.ls}세까지 ${ly}년간 투자 수익률 ${(a.r*100).toFixed(1)}% 적용`;
+  document.getElementById('r1_years').textContent=ly+'년';
+  document.getElementById('r1_alabel').textContent=`${rYear}년 기준 연간 지출`;
+  document.getElementById('r1_annual').textContent=fmt(ra)+' / 년';
+  document.getElementById('chart-sub').textContent=`${rYear}년 은퇴 (${rAge}세) → ${rYear+ly}년 (${a.ls}세)`;
+  document.getElementById('result1').style.display='block';
+  setTimeout(()=>drawRC(needed,rYear,rAge,ra,a,ssE,legacyAtDeath),50);
+}
+
+function syncTab2Display(){
+  const ann=getAT();
+  document.getElementById('p2_ann_display').textContent=fmt(ann);
+  document.getElementById('p2_mon_display').textContent=fmt(ann/12)+' / 월';
+
+  // 탭0 기본 가정값 표시
+  const a=gA();
+  document.getElementById('p2_shared_ls').textContent=a.ls+'세';
+  document.getElementById('p2_shared_r').textContent=(a.r*100).toFixed(1)+'%';
+  document.getElementById('p2_shared_inf').textContent=(a.inf*100).toFixed(1)+'%';
+
+  // 유산 목표
+  const legRow=document.getElementById('p2_shared_legacy_row');
+  if(a.legacyNom>0){
+    legRow.style.display='block';
+    document.getElementById('p2_shared_legacy').textContent=
+      fmt(a.legacyNom)+(a.legacyReal?' (현재 가치 기준, 물가 반영)':' (명목 금액)');
+  } else {
+    legRow.style.display='none';
+  }
+
+  // SS 반영 여부
+  const n2=document.getElementById('ss-notice2');
+  if(ASS[0]||ASS[1]){
+    n2.style.display='block';
+    const fmtUSD=v=>'$'+Math.round(v).toLocaleString('en-US');
+    let lines=[];
+    if(ASS[0])lines.push(`본인: ${fmtUSD(ASS[0].monthly)}/월 (${ASS[0].claimAge}세부터)`);
+    if(ASS[1])lines.push(`배우자: ${fmtUSD(ASS[1].monthly)}/월 (${ASS[1].claimAge}세부터)`);
+    document.getElementById('ss-notice2-detail').textContent=lines.join('\n');
+  } else {
+    n2.style.display='none';
+  }
+}
+
+let RDS2=null;
+function drawRC2(needed,rYear,rAge,realAnn,r,inf,ls,ssE,legacyAtDeath){
+  const ly=ls-rAge;
+  const aD=simAsset(needed,ly,realAnn,r,inf,ssE,rAge,legacyAtDeath);
+  const labels=[],eD=[],sD=[],legD=[];
+  const showLeg=legacyAtDeath>0;
+  for(let y=0;y<=ly;y++){
+    labels.push(`${rYear+y} (${rAge+y}세)`);
+    eD.push(Math.round(realAnn*Math.pow(1+inf,y)));
+    let ss=0;ssE.forEach(e=>{if(e&&(rAge+y)>=e.claimAge)ss+=e.monthlyAtRetire*12*Math.pow(1+inf,y);});
+    sD.push(ss>0?Math.round(ss):null);
+    legD.push(Math.round(legacyAtDeath));
+  }
+  const dk=window.matchMedia('(prefers-color-scheme:dark)').matches,tc=dk?'rgba(255,255,255,0.45)':'rgba(0,0,0,0.38)',gc=dk?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)';
+  const ds=[
+    {label:'남은 자산',data:aD,borderColor:'#378ADD',backgroundColor:'rgba(55,138,221,0.08)',borderWidth:2,pointRadius:0,pointHoverRadius:4,fill:true,tension:0.3,yAxisID:'yA'},
+    {label:'연간 생활비',data:eD,borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,0.06)',borderWidth:2,pointRadius:0,pointHoverRadius:4,fill:true,tension:0.3,yAxisID:'yA'}
+  ];
+  if(sD.some(v=>v!==null)){
+    ds.push({label:'SS 합산',data:sD,borderColor:'#EF9F27',borderWidth:2,pointRadius:0,pointHoverRadius:4,fill:false,tension:0.3,yAxisID:'yA',spanGaps:false});
+    document.getElementById('ss-legend2').style.display='flex';
+  } else {
+    document.getElementById('ss-legend2').style.display='none';
+  }
+  if(showLeg){
+    ds.push({label:'유산 목표',data:legD,borderColor:'#9B59B6',borderWidth:1.5,borderDash:[6,4],pointRadius:0,fill:false,tension:0,yAxisID:'yA'});
+    document.getElementById('legacy-legend2').style.display='flex';
+  } else {
+    document.getElementById('legacy-legend2').style.display='none';
+  }
+  if(RDS2)RDS2.destroy();
+  RDS2=new Chart(document.getElementById('retireChart2').getContext('2d'),{type:'line',data:{labels,datasets:ds},options:{responsive:true,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{backgroundColor:dk?'#1a1a1a':'#fff',borderColor:dk?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.1)',borderWidth:1,titleColor:dk?'rgba(255,255,255,0.7)':'rgba(0,0,0,0.6)',bodyColor:dk?'rgba(255,255,255,0.9)':'rgba(0,0,0,0.85)',padding:10,callbacks:{label:i=>i.raw!==null?' '+i.dataset.label+': '+fk(i.raw):null}}},scales:{x:{ticks:{color:tc,font:{size:11},maxTicksLimit:8},grid:{color:gc}},yA:{type:'linear',position:'left',min:0,ticks:{color:tc,font:{size:11},callback:v=>fk(v)},grid:{color:gc}}}}});
+}
+
+function calc2(){
+  const cAge=parseFloat(document.getElementById('p2_age').value)||40;
+  const current=parseFloat(document.getElementById('p2_current').value)||0;
+  const annualSave=parseFloat(document.getElementById('p2_annual').value)||0;
+  const preR=parseFloat(document.getElementById('p2_prereturn').value)/100||0.07;
+
+  // 탭0 기본 가정값 공유
+  const a=gA();
+  const ls=a.ls, postR=a.r, inf=a.inf, legacyNom=a.legacyNom, legacyReal=a.legacyReal;
+
+  const ann=getAT();
+  if(ann<=0){alert('탭 1의 지출 항목을 먼저 입력해주세요.');return;}
+  if(ls<=cAge){alert('평균 수명이 현재 나이보다 낮습니다.');return;}
+
+  const w=document.getElementById('r2_warn');
+  const MAX_YEARS=ls-cAge;
+
+  let foundYear=null, foundAsset=null, foundNeeded=null;
+  let asset=current;
+
+  for(let y=0;y<=MAX_YEARS;y++){
+    const rAge=cAge+y;
+    const ly=ls-rAge;
+    if(ly<=0) break;
+
+    const ra=ann*Math.pow(1+inf,y);
+
+    let legacyAtDeath=0;
+    if(legacyNom>0){
+      legacyAtDeath=legacyReal ? legacyNom*Math.pow(1+inf,y+ly) : legacyNom;
+    }
+
+    const ssE=[];
+    ASS.forEach(ss=>{if(ss)ssE.push({monthlyAtRetire:ss.monthly,claimAge:ss.claimAge});});
+
+    const needed=calcNeeded(ra,ly,postR,inf,ssE,rAge,legacyAtDeath);
+
+    if(asset>=needed){
+      foundYear=y;
+      foundAsset=asset;
+      foundNeeded=needed;
+      break;
+    }
+
+    asset=asset*(1+preR)+annualSave;
+  }
+
+  document.getElementById('result2').style.display='block';
+
+  if(foundYear===null){
+    document.getElementById('r2_age').textContent='은퇴 어려움';
+    document.getElementById('r2_sub').textContent='현재 저축 속도와 지출 규모로는 수명 내 은퇴가 어렵습니다.';
+    document.getElementById('r2_left').textContent='—';
+    document.getElementById('r2_final').textContent='—';
+    document.getElementById('r2_needed').textContent='—';
+    document.getElementById('r2_firstexp').textContent='—';
+    w.style.display='block';
+    w.textContent='연간 저축액을 늘리거나, 지출을 줄이거나, 유산 목표를 조정해보세요.';
+    return;
+  }
+
+  w.style.display='none';
+  const rAge=cAge+foundYear;
+  const rYear=CY+foundYear;
+  const ly=ls-rAge;
+  const ra=ann*Math.pow(1+inf,foundYear);
+  let legacyAtDeath=0;
+  if(legacyNom>0){
+    legacyAtDeath=legacyReal ? legacyNom*Math.pow(1+inf,foundYear+ly) : legacyNom;
+  }
+  const ssE=[];
+  ASS.forEach(ss=>{if(ss)ssE.push({monthlyAtRetire:ss.monthly,claimAge:ss.claimAge});});
+
+  document.getElementById('r2_age').textContent=`${rAge}세 (${rYear}년)`;
+  document.getElementById('r2_sub').textContent=foundYear===0?'지금 바로 은퇴 가능해요!':`지금으로부터 ${foundYear}년 후`;
+  document.getElementById('r2_left').textContent=foundYear===0?'지금 가능':foundYear+'년';
+  document.getElementById('r2_final').textContent=fmt(foundAsset);
+  document.getElementById('r2_needed').textContent=fmt(foundNeeded);
+  document.getElementById('r2_firstexp').textContent=fmt(ra)+' / 년';
+  document.getElementById('chart-sub2').textContent=`${rYear}년 은퇴 (${rAge}세) → ${rYear+ly}년 (${ls}세)`;
+
+  setTimeout(()=>drawRC2(foundAsset,rYear,rAge,ra,postR,inf,ls,ssE,legacyAtDeath),50);
+}
+
+function addRow(name='',amount='',period='monthly'){
+  const tbody=document.getElementById('expense-body'),tr=document.createElement('tr');tr.draggable=true;
+  const annVal = amount ? fmt(ta(parseFloat(amount)||0,period)) : fmt(0);
+  tr.innerHTML=`<td><div class="drag-handle">⠿</div></td><td><input type="text" class="name-input" placeholder="항목 이름" value="${name}"></td><td><input type="number" class="amt-input" placeholder="0" value="${amount}" min="0" oninput="updateTotal()"></td><td><select class="period-select" onchange="updateTotal()"><option value="monthly" ${period==='monthly'?'selected':''}>월</option><option value="annual" ${period==='annual'?'selected':''}>연</option></select></td><td class="annual-equiv" style="text-align:right;padding-right:8px;">${annVal}</td><td><button class="del-btn" onclick="this.closest('tr').remove();updateTotal()">×</button></td>`;
+  tr.addEventListener('dragstart',e=>{rowSrc=tr;setTimeout(()=>tr.classList.add('dragging'),0);e.dataTransfer.effectAllowed='move';});
+  tr.addEventListener('dragend',()=>{tr.classList.remove('dragging');document.querySelectorAll('#expense-body tr').forEach(r=>r.classList.remove('drag-over'));rowSrc=null;});
+  tr.addEventListener('dragover',e=>{e.preventDefault();if(rowSrc&&rowSrc!==tr){document.querySelectorAll('#expense-body tr').forEach(r=>r.classList.remove('drag-over'));tr.classList.add('drag-over');}});
+  tr.addEventListener('dragleave',()=>tr.classList.remove('drag-over'));
+  tr.addEventListener('drop',e=>{e.preventDefault();tr.classList.remove('drag-over');if(rowSrc&&rowSrc!==tr){const rows=[...tbody.querySelectorAll('tr')],si=rows.indexOf(rowSrc),ti=rows.indexOf(tr);if(si<ti)tbody.insertBefore(rowSrc,tr.nextSibling);else tbody.insertBefore(rowSrc,tr);updateTotal();}});
+  tbody.appendChild(tr);updateTotal();
+}
+
+function switchPerson(i){document.querySelectorAll('.ptab').forEach((t,j)=>t.classList.toggle('active',i===j));document.querySelectorAll('.ppanel').forEach((p,j)=>p.classList.toggle('active',i===j));if(PS[i].d.length===0)rebuildChart(i,true);}
+function switchTab(i){document.querySelectorAll('.tab').forEach((t,j)=>t.classList.toggle('active',i===j));document.querySelectorAll('.panel').forEach((p,j)=>p.classList.toggle('active',i===j));if(i===1)syncTab2Display();if(i===2&&PS[0].d.length===0)rebuildChart(0,true);}
+
+// ─── Service Worker 등록 (PWA) ───
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.log('SW error:', err));
+  });
+}
+
+[{name:'기본 생활비',amount:2000,period:'monthly'},{name:'집 유지비 + Property Tax',amount:15000,period:'annual'},{name:'여행 비용',amount:10000,period:'annual'},{name:'기타 / 비상금',amount:1000,period:'monthly'}].forEach(r=>addRow(r.name,r.amount,r.period));
+updateHint(0);updateHint(1);rebuildChart(0,true);
+// init preview
+onCurrencyChange();
+</script>
+</body>
+</html>
