@@ -144,6 +144,30 @@
   .arow { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
   .atotal { display: flex; justify-content: space-between; align-items: center; padding: 8px 0 0; border-top: 0.5px solid var(--color-border-secondary); margin-top: 4px; }
 
+  /* 토스트 */
+  .toast {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1D9E75;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 10px 22px;
+    border-radius: 24px;
+    opacity: 0;
+    transition: opacity 0.25s, transform 0.25s;
+    pointer-events: none;
+    z-index: 9999;
+    white-space: nowrap;
+    font-family: var(--font-sans);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
   /* Currency tag badge next to header */
   .currency-badge {
     display: inline-flex;
@@ -164,6 +188,8 @@
 <body>
 
 <!-- Currency Selector -->
+<div id="toast" class="toast"></div>
+
 <div class="currency-bar">
   <label>화폐 단위</label>
   <select class="currency-select" id="currency-select" onchange="onCurrencyChange()">
@@ -256,10 +282,10 @@
   <!-- 현재 재산 / 저축 -->
   <div class="row2">
     <div class="field"><label>현재 나이 (세)</label><input type="number" id="p2_age" value="40"></div>
-    <div class="field"><label>현재 자산 총액</label><input type="number" id="p2_current" value="200000"></div>
+    <div class="field"><label>현재 자산 총액</label><input type="text" id="p2_current" value="200,000" inputmode="numeric" onfocus="unformatInput(this)" onblur="formatInput(this)" oninput="saveAll()"></div>
   </div>
   <div class="row2">
-    <div class="field"><label>연간 저축액</label><input type="number" id="p2_annual" value="30000"></div>
+    <div class="field"><label>연간 저축액</label><input type="text" id="p2_annual" value="30,000" inputmode="numeric" onfocus="unformatInput(this)" onblur="formatInput(this)" oninput="saveAll()"></div>
     <div class="field">
       <label>은퇴 전 투자 수익률 (%/년)</label>
       <input type="number" id="p2_prereturn" value="7" step="0.1">
@@ -495,9 +521,17 @@ function fk(n) {
 
 // ─────────────────────────────────────────────
 // SS WAGE BASE TABLE
+// 2026년 이후: AWI(전국 평균임금 상승률) 기반 연 3.5% 추정
+// SSA 공식 조정 방식과 동일한 접근 — 물가상승률(2.5%)보다 높은 임금상승률 반영
 // ─────────────────────────────────────────────
 const WB={1975:14100,1976:15300,1977:16500,1978:17700,1979:22900,1980:25900,1981:29700,1982:32400,1983:35700,1984:37800,1985:39600,1986:42000,1987:43800,1988:45000,1989:48000,1990:51300,1991:53400,1992:55500,1993:57600,1994:60600,1995:61200,1996:62700,1997:65400,1998:68400,1999:72600,2000:76200,2001:80400,2002:84900,2003:87000,2004:87900,2005:90000,2006:94200,2007:97500,2008:102000,2009:106800,2010:106800,2011:106800,2012:110100,2013:113700,2014:117000,2015:118500,2016:118500,2017:127200,2018:128400,2019:132900,2020:137700,2021:142800,2022:147000,2023:160200,2024:168600,2025:176100};
-function cap(yr){if(yr>=2025)return WB[2025];if(yr<=1975)return WB[1975];return WB[yr]||WB[2024];}
+const SS_AWI_RATE = 0.035; // 2026년 이후 AWI 기반 추정 상승률
+function cap(yr){
+  if(yr<=1975) return WB[1975];
+  if(yr<=2025) return WB[yr]||WB[2024];
+  // 2026년 이후: 2025년 기준으로 AWI 3.5% 복리 추정
+  return Math.round(WB[2025]*Math.pow(1+SS_AWI_RATE, yr-2025));
+}
 
 const CM=200000,CY=new Date().getFullYear();
 const D0=[[28000],[120000],[120000],[125000],[125000],[140000],[140000],[140000],[145000],[40000]];
@@ -612,11 +646,14 @@ function updateApplyBox(){
 }
 function applySSToCalc(){
   ASS=[PS[0].res?{monthly:PS[0].res.monthly,claimAge:PS[0].res.claimAge}:null,PS[1].res?{monthly:PS[1].res.monthly,claimAge:PS[1].res.claimAge}:null];
-  document.getElementById('apply-btn').classList.add('applied');document.getElementById('apply-btn').textContent='✓ 반영 완료 — 탭 1에서 계산하기를 눌러주세요';
+  document.getElementById('apply-btn').classList.add('applied');document.getElementById('apply-btn').textContent='✓ 반영 완료';
   const n=document.getElementById('ss-notice');n.style.display='block';
   const fmtUSD=v=>'$'+Math.round(v).toLocaleString('en-US');
   let lines=[];if(ASS[0])lines.push(`본인: ${fmtUSD(ASS[0].monthly)}/월 (${ASS[0].claimAge}세부터)`);if(ASS[1])lines.push(`배우자: ${fmtUSD(ASS[1].monthly)}/월 (${ASS[1].claimAge}세부터)`);lines.push(`합산: ${fmtUSD((ASS[0]?.monthly||0)+(ASS[1]?.monthly||0))}/월`);
-  document.getElementById('ss-notice-detail').textContent=lines.join('\n');switchTab(0);saveAll();
+  document.getElementById('ss-notice-detail').textContent=lines.join('\n');
+  // 토스트 메시지
+  showToast('✓ 필요 저축액 계산에 반영됐어요');
+  saveAll();
 }
 function removeSS(){ASS=[null,null];document.getElementById('ss-notice').style.display='none';document.getElementById('ss-legend').style.display='none';saveAll();}
 
@@ -809,11 +846,12 @@ function drawRC2(needed,rYear,rAge,realAnn,r,inf,ls,ssE,legacyAtDeath){
 
 function calc2(){
   const cAge=parseFloat(document.getElementById('p2_age').value)||40;
-  const current=parseFloat(document.getElementById('p2_current').value)||0;
-  const annualSave=parseFloat(document.getElementById('p2_annual').value)||0;
+  const current=parseFormattedInput('p2_current');
+  const annualSave=parseFormattedInput('p2_annual');
   const preR=parseFloat(document.getElementById('p2_prereturn').value)/100||0.07;
+  const preRm=Math.pow(1+preR,1/12)-1; // 월 수익률
+  const monthlySave=annualSave/12;
 
-  // 탭0 기본 가정값 공유
   const a=gA();
   const ls=a.ls, postR=a.r, inf=a.inf, legacyNom=a.legacyNom, legacyReal=a.legacyReal;
 
@@ -822,36 +860,24 @@ function calc2(){
   if(ls<=cAge){alert('평균 수명이 현재 나이보다 낮습니다.');return;}
 
   const w=document.getElementById('r2_warn');
-  const MAX_YEARS=ls-cAge;
+  const ssE=[];
+  ASS.forEach(ss=>{if(ss)ssE.push({monthlyAtRetire:ss.monthly,claimAge:ss.claimAge});});
 
-  let foundYear=null, foundAsset=null, foundNeeded=null;
-  let asset=current;
+  // ── 1단계: 연 단위로 은퇴 가능 연도 탐색 ──
+  let foundYear=null;
+  let assetAtYearStart=current;
+  const MAX_YEARS=ls-cAge;
 
   for(let y=0;y<=MAX_YEARS;y++){
     const rAge=cAge+y;
     const ly=ls-rAge;
     if(ly<=0) break;
-
     const ra=ann*Math.pow(1+inf,y);
-
     let legacyAtDeath=0;
-    if(legacyNom>0){
-      legacyAtDeath=legacyReal ? legacyNom*Math.pow(1+inf,y+ly) : legacyNom;
-    }
-
-    const ssE=[];
-    ASS.forEach(ss=>{if(ss)ssE.push({monthlyAtRetire:ss.monthly,claimAge:ss.claimAge});});
-
+    if(legacyNom>0) legacyAtDeath=legacyReal?legacyNom*Math.pow(1+inf,y+ly):legacyNom;
     const needed=calcNeeded(ra,ly,postR,inf,ssE,rAge,legacyAtDeath);
-
-    if(asset>=needed){
-      foundYear=y;
-      foundAsset=asset;
-      foundNeeded=needed;
-      break;
-    }
-
-    asset=asset*(1+preR)+annualSave;
+    if(assetAtYearStart>=needed){ foundYear=y; break; }
+    assetAtYearStart=assetAtYearStart*(1+preR)+annualSave;
   }
 
   document.getElementById('result2').style.display='block';
@@ -868,27 +894,115 @@ function calc2(){
     return;
   }
 
-  w.style.display='none';
-  const rAge=cAge+foundYear;
-  const rYear=CY+foundYear;
-  const ly=ls-rAge;
-  const ra=ann*Math.pow(1+inf,foundYear);
-  let legacyAtDeath=0;
-  if(legacyNom>0){
-    legacyAtDeath=legacyReal ? legacyNom*Math.pow(1+inf,foundYear+ly) : legacyNom;
+  // ── 2단계: 해당 연도 내에서 월 단위로 정확한 달 탐색 ──
+  // 전년도 말 자산에서 시작해서 월별로 증식+저축
+  let assetPrevYear = foundYear === 0 ? current
+    : (()=>{
+        let a=current;
+        for(let y=0;y<foundYear-1;y++) a=a*(1+preR)+annualSave;
+        // 전년도는 월별로 정밀하게
+        for(let m=0;m<12;m++) a=a*(1+preRm)+monthlySave;
+        return a;
+      })();
+
+  // foundYear==0이면 month=0부터 시작 (지금 바로)
+  let foundMonth=0;
+  let assetAtMonth=foundYear===0?current:assetPrevYear;
+
+  if(foundYear>0){
+    // 전년도 말 정확한 자산
+    let a2=current;
+    for(let y=0;y<foundYear;y++){
+      // 각 연도를 월별로
+      for(let m=0;m<12;m++) a2=a2*(1+preRm)+monthlySave;
+    }
+    // 이 시점이 foundYear 초 → 여기서부터 월별 탐색
+    assetAtMonth=a2;
+    // 사실 foundYear 시작 시점은 foundYear-1 말
+    // 다시: foundYear 시작 자산을 월별로 재계산
+    let aStart=current;
+    for(let y=0;y<foundYear;y++){
+      for(let m=0;m<12;m++) aStart=aStart*(1+preRm)+monthlySave;
+    }
+    assetAtMonth=aStart;
   }
-  const ssE=[];
-  ASS.forEach(ss=>{if(ss)ssE.push({monthlyAtRetire:ss.monthly,claimAge:ss.claimAge});});
 
-  document.getElementById('r2_age').textContent=`${rAge}세 (${rYear}년)`;
-  document.getElementById('r2_sub').textContent=foundYear===0?'지금 바로 은퇴 가능해요!':`지금으로부터 ${foundYear}년 후`;
-  document.getElementById('r2_left').textContent=foundYear===0?'지금 가능':foundYear+'년';
-  document.getElementById('r2_final').textContent=fmt(foundAsset);
-  document.getElementById('r2_needed').textContent=fmt(foundNeeded);
+  // foundYear 시작 자산을 정확히 계산
+  let aExact=current;
+  for(let y=0;y<foundYear;y++){
+    for(let m=0;m<12;m++) aExact=aExact*(1+preRm)+monthlySave;
+  }
+  assetAtMonth=aExact;
+
+  foundMonth=0;
+  let finalAsset=assetAtMonth;
+  let finalNeeded=0;
+
+  for(let m=0;m<12;m++){
+    const totalMonths=foundYear*12+m;
+    const rAgeExact=cAge+totalMonths/12;
+    const ly=ls-Math.floor(rAgeExact); // 남은 수명 (연 단위)
+    const yFrac=totalMonths/12;
+    const ra=ann*Math.pow(1+inf,yFrac);
+    const rAgeFl=cAge+Math.round(yFrac*10)/10;
+    let legacyAtDeath=0;
+    if(legacyNom>0) legacyAtDeath=legacyReal?legacyNom*Math.pow(1+inf,yFrac+ly):legacyNom;
+    const needed=calcNeeded(ra,ly,postR,inf,ssE,rAgeFl,legacyAtDeath);
+
+    if(assetAtMonth>=needed){
+      foundMonth=m;
+      finalAsset=assetAtMonth;
+      finalNeeded=needed;
+      break;
+    }
+    // 다음 달로
+    if(m<11){
+      assetAtMonth=assetAtMonth*(1+preRm)+monthlySave;
+      foundMonth=m+1;
+      finalAsset=assetAtMonth;
+    }
+  }
+
+  w.style.display='none';
+
+  // 결과 표시용 값 계산
+  const totalMonths=foundYear*12+foundMonth;
+  const rAgeExact=cAge+totalMonths/12;
+  const rYear=CY+Math.floor(totalMonths/12);
+  const rMonth=new Date().getMonth()+1+foundMonth; // 현재 월 기준
+  const rAgeFl=cAge+Math.floor(totalMonths/12);
+  const ly=ls-rAgeFl;
+  const yFrac=totalMonths/12;
+  const ra=ann*Math.pow(1+inf,yFrac);
+  let legacyAtDeath=0;
+  if(legacyNom>0) legacyAtDeath=legacyReal?legacyNom*Math.pow(1+inf,yFrac+ly):legacyNom;
+
+  // 남은 기간 표시
+  const remYears=foundYear;
+  const remMonths=foundMonth;
+  let leftStr;
+  if(totalMonths===0){
+    leftStr='지금 가능';
+  } else if(remYears===0){
+    leftStr=`${remMonths}개월`;
+  } else if(remMonths===0){
+    leftStr=`${remYears}년`;
+  } else {
+    leftStr=`${remYears}년 ${remMonths}개월`;
+  }
+
+  // 나이 표시 (소수점 1자리)
+  const rAgeDisp=Math.floor(rAgeExact)+'세 '+(remMonths>0?`${remMonths}개월`:'');
+
+  document.getElementById('r2_age').textContent=`${rAgeDisp.trim()} (${rYear}년)`;
+  document.getElementById('r2_sub').textContent=totalMonths===0?'지금 바로 은퇴 가능해요!':`지금으로부터 ${leftStr} 후`;
+  document.getElementById('r2_left').textContent=leftStr;
+  document.getElementById('r2_final').textContent=fmt(finalAsset);
+  document.getElementById('r2_needed').textContent=fmt(finalNeeded||calcNeeded(ra,ly,postR,inf,ssE,rAgeFl,legacyAtDeath));
   document.getElementById('r2_firstexp').textContent=fmt(ra)+' / 년';
-  document.getElementById('chart-sub2').textContent=`${rYear}년 은퇴 (${rAge}세) → ${rYear+ly}년 (${ls}세)`;
+  document.getElementById('chart-sub2').textContent=`${rYear}년 은퇴 (${rAgeFl}세) → ${rYear+ly}년 (${ls}세)`;
 
-  setTimeout(()=>drawRC2(foundAsset,rYear,rAge,ra,postR,inf,ls,ssE,legacyAtDeath),50);
+  setTimeout(()=>drawRC2(finalAsset,rYear,rAgeFl,ra,postR,inf,ls,ssE,legacyAtDeath),50);
 }
 
 function addRow(name='',amount='',period='monthly'){
@@ -921,6 +1035,34 @@ if ('serviceWorker' in navigator) {
 const LS_KEY = 'retirement_calc_v1';
 
 let _appReady = false;
+
+// ── 토스트 ──
+let _toastTimer = null;
+function showToast(msg, duration=2800) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+// ── 금액 필드 포맷팅 ──
+function formatInput(el) {
+  const raw = el.value.replace(/[^0-9]/g, '');
+  const num = parseInt(raw, 10);
+  if (!isNaN(num)) {
+    el.value = num.toLocaleString('en-US');
+  } else {
+    el.value = '';
+  }
+}
+function unformatInput(el) {
+  el.value = el.value.replace(/[^0-9]/g, '');
+}
+function parseFormattedInput(id) {
+  const val = document.getElementById(id).value.replace(/[^0-9]/g, '');
+  return parseFloat(val) || 0;
+}
 
 function saveAll() {
   if (!_appReady) return;
@@ -959,8 +1101,8 @@ function saveAll() {
 
       // 탭1 — 은퇴 가능 시점
       p2_age:       document.getElementById('p2_age').value,
-      p2_current:   document.getElementById('p2_current').value,
-      p2_annual:    document.getElementById('p2_annual').value,
+      p2_current:   parseFormattedInput('p2_current'),
+      p2_annual:    parseFormattedInput('p2_annual'),
       p2_prereturn: document.getElementById('p2_prereturn').value,
 
       // 탭2 — SS 본인
@@ -1026,8 +1168,9 @@ function loadAll() {
 
     // 탭1
     set('p2_age',       d.p2_age);
-    set('p2_current',   d.p2_current);
-    set('p2_annual',    d.p2_annual);
+    // 포맷 필드: 숫자로 복원 후 포맷 적용
+    if (d.p2_current) { document.getElementById('p2_current').value = d.p2_current; formatInput(document.getElementById('p2_current')); }
+    if (d.p2_annual)  { document.getElementById('p2_annual').value  = d.p2_annual;  formatInput(document.getElementById('p2_annual')); }
     set('p2_prereturn', d.p2_prereturn);
 
     // 탭2 — SS 본인
