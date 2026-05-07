@@ -533,11 +533,20 @@ function cap(yr){
   return Math.round(WB[2025]*Math.pow(1+SS_AWI_RATE, yr-2025));
 }
 
-const CM=200000,CY=new Date().getFullYear();
+const CY=new Date().getFullYear();
 const D0=[[28000],[120000],[120000],[125000],[125000],[140000],[140000],[140000],[145000],[40000]];
 const D1=[[100000],[130000],[130000],[140000],[140000],[160000],[160000],[176100],[176100],[176100],[176100],[176100],[176100],[176100]];
 const PS=[{d:[],ci:null,dr:false,di:-1,res:null},{d:[],ci:null,dr:false,di:-1,res:null}];
 let ASS=[null,null],RDS=null,rowSrc=null;
+
+// 차트 y축 최대값: 범위 내 SS 과세 상한 최대값 + 여유 20%, 50K 단위 반올림
+function getChartMax(p){
+  if(!PS[p].d.length) return 250000;
+  const maxCap=Math.max(...PS[p].d.map(x=>cap(a2y(p,x.age))));
+  const maxInc=Math.max(...PS[p].d.map(x=>x.income));
+  const raw=Math.max(maxCap,maxInc)*1.15;
+  return Math.ceil(raw/50000)*50000;
+}
 
 function gA(){
   const ls=parseFloat(document.getElementById('a_lifespan').value)||85,r=parseFloat(document.getElementById('a_return').value)/100||0.06,inf=parseFloat(document.getElementById('a_inflation').value)/100||0.025;
@@ -583,14 +592,24 @@ function rebuildChart(p,useDefault){
 function renderIC(p){
   const d=PS[p].d,labels=d.map(x=>[x.age+'세',a2y(p,x.age)+'년']),vals=d.map(x=>x.income),caps=d.map(x=>cap(a2y(p,x.age))),cols=d.map((x,i)=>x.income>=caps[i]?'#BA7517':'#378ADD');
   if(PS[p].ci)PS[p].ci.destroy();
+  const CM=getChartMax(p);
+  // y축 틱: 0부터 CM까지 5단계
+  const tickStep=CM/4;
+  const yTicks=[0,1,2,3,4].map(i=>({value:Math.round(i*tickStep)}));
   const ctx=document.getElementById(`ic-${p}`).getContext('2d');
-  PS[p].ci=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data:vals,backgroundColor:cols,borderColor:cols,borderWidth:0,borderRadius:3,borderSkipped:false,order:2},{data:caps,type:'line',borderColor:'#EF9F27',borderWidth:1.5,borderDash:[5,4],pointRadius:0,fill:false,tension:0.3,order:1}]},options:{responsive:true,animation:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{ticks:{color:'rgba(128,128,128,0.6)',font:{size:10},maxRotation:0,callback:function(v,i){const n=d.length;if(n<=12||i===0||i===n-1||i%Math.ceil(n/10)===0){const x=d[i];return x?[x.age+'세',a2y(p,x.age)+'년']:'';}return '';}},grid:{display:false}},y:{min:0,max:CM,ticks:{color:'rgba(128,128,128,0.6)',font:{size:10},callback:v=>'$'+(v/1000)+'K',afterBuildTicks:a=>{a.ticks=[0,50000,100000,150000,200000].map(v=>({value:v}));}},grid:{color:'rgba(128,128,128,0.08)'}}}}});
+  PS[p].ci=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data:vals,backgroundColor:cols,borderColor:cols,borderWidth:0,borderRadius:3,borderSkipped:false,order:2},{data:caps,type:'line',borderColor:'#EF9F27',borderWidth:1.5,borderDash:[5,4],pointRadius:0,fill:false,tension:0.3,order:1}]},options:{responsive:true,animation:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{ticks:{color:'rgba(128,128,128,0.6)',font:{size:10},maxRotation:0,callback:function(v,i){const n=d.length;if(n<=12||i===0||i===n-1||i%Math.ceil(n/10)===0){const x=d[i];return x?[x.age+'세',a2y(p,x.age)+'년']:'';}return '';}},grid:{display:false}},y:{min:0,max:CM,ticks:{color:'rgba(128,128,128,0.6)',font:{size:10},callback:v=>'$'+(v/1000)+'K',afterBuildTicks:a=>{a.ticks=yTicks;}},grid:{color:'rgba(128,128,128,0.08)'}}}}});
   setupDrag(p);
 }
 function gBI(p,cx){const cv=document.getElementById(`ic-${p}`),r=cv.getBoundingClientRect(),x=cx-r.left,ca=PS[p].ci.chartArea,n=PS[p].d.length;if(!n||x<ca.left||x>ca.right)return -1;return Math.min(Math.floor((x-ca.left)/((ca.right-ca.left)/n)),n-1);}
 function gBX(p,i){const ca=PS[p].ci.chartArea,n=PS[p].d.length,w=(ca.right-ca.left)/n;return ca.left+w*i+w/2;}
-function iFromY(p,i,cy){const cv=document.getElementById(`ic-${p}`),r=cv.getBoundingClientRect(),ca=PS[p].ci.chartArea,ratio=1-(cy-r.top-ca.top)/(ca.bottom-ca.top),s=Math.round(ratio*CM/10000)*10000,c=cap(a2y(p,PS[p].d[i].age));return Math.max(0,Math.min(c,s));}
+function iFromY(p,i,cy){
+  const CM=getChartMax(p);
+  const cv=document.getElementById(`ic-${p}`),r=cv.getBoundingClientRect(),ca=PS[p].ci.chartArea,ratio=1-(cy-r.top-ca.top)/(ca.bottom-ca.top);
+  const s=Math.round(ratio*CM/5000)*5000,c=cap(a2y(p,PS[p].d[i].age));
+  return Math.max(0,Math.min(c,s));
+}
 function doDrag(p,cx,cy){
+  const CM=getChartMax(p);
   const i=PS[p].di;if(i<0||i>=PS[p].d.length)return;
   const ni=iFromY(p,i,cy),c=cap(a2y(p,PS[p].d[i].age)),atCap=ni>=c,col=atCap?'#BA7517':'#378ADD';
   PS[p].d[i].income=ni;PS[p].ci.data.datasets[0].data[i]=ni;PS[p].ci.data.datasets[0].backgroundColor[i]=col;PS[p].ci.data.datasets[0].borderColor[i]=col;PS[p].ci.update('none');
@@ -867,7 +886,7 @@ function calc2(){
   function neededAt(totalMonths){
     const yFrac=totalMonths/12;
     const rAge=cAge+yFrac;
-    const ly=ls-Math.round(rAge); // 은퇴 후 남은 수명 (반올림)
+    const ly=ls-Math.floor(rAge); // floor: 소수점 나이는 내림해서 남은 수명 계산
     if(ly<=0) return Infinity;
     const ra=ann*Math.pow(1+inf,yFrac);
     let legacyAtDeath=0;
