@@ -849,7 +849,7 @@ function calc2(){
   const current=parseFormattedInput('p2_current');
   const annualSave=parseFormattedInput('p2_annual');
   const preR=parseFloat(document.getElementById('p2_prereturn').value)/100||0.07;
-  const preRm=Math.pow(1+preR,1/12)-1; // 월 수익률
+  const preRm=Math.pow(1+preR,1/12)-1; // 연 수익률 → 월 수익률
   const monthlySave=annualSave/12;
 
   const a=gA();
@@ -863,26 +863,38 @@ function calc2(){
   const ssE=[];
   ASS.forEach(ss=>{if(ss)ssE.push({monthlyAtRetire:ss.monthly,claimAge:ss.claimAge});});
 
-  // ── 1단계: 연 단위로 은퇴 가능 연도 탐색 ──
-  let foundYear=null;
-  let assetAtYearStart=current;
-  const MAX_YEARS=ls-cAge;
-
-  for(let y=0;y<=MAX_YEARS;y++){
-    const rAge=cAge+y;
-    const ly=ls-rAge;
-    if(ly<=0) break;
-    const ra=ann*Math.pow(1+inf,y);
+  // 필요 저축액 계산 헬퍼 (총 경과 개월 수 기준)
+  function neededAt(totalMonths){
+    const yFrac=totalMonths/12;
+    const rAge=cAge+yFrac;
+    const ly=ls-Math.round(rAge); // 은퇴 후 남은 수명 (반올림)
+    if(ly<=0) return Infinity;
+    const ra=ann*Math.pow(1+inf,yFrac);
     let legacyAtDeath=0;
-    if(legacyNom>0) legacyAtDeath=legacyReal?legacyNom*Math.pow(1+inf,y+ly):legacyNom;
-    const needed=calcNeeded(ra,ly,postR,inf,ssE,rAge,legacyAtDeath);
-    if(assetAtYearStart>=needed){ foundYear=y; break; }
-    assetAtYearStart=assetAtYearStart*(1+preR)+annualSave;
+    if(legacyNom>0) legacyAtDeath=legacyReal?legacyNom*Math.pow(1+inf,yFrac+ly):legacyNom;
+    return calcNeeded(ra,ly,postR,inf,ssE,rAge,legacyAtDeath);
+  }
+
+  // ── 월 단위 단일 루프 탐색 ──
+  const MAX_MONTHS=(ls-cAge)*12;
+  let asset=current;
+  let foundTotalMonths=null;
+  let finalAsset=current;
+
+  for(let m=0;m<=MAX_MONTHS;m++){
+    const needed=neededAt(m);
+    if(asset>=needed){
+      foundTotalMonths=m;
+      finalAsset=asset;
+      break;
+    }
+    // 다음 달: 월 수익 + 월 저축
+    asset=asset*(1+preRm)+monthlySave;
   }
 
   document.getElementById('result2').style.display='block';
 
-  if(foundYear===null){
+  if(foundTotalMonths===null){
     document.getElementById('r2_age').textContent='은퇴 어려움';
     document.getElementById('r2_sub').textContent='현재 저축 속도와 지출 규모로는 수명 내 은퇴가 어렵습니다.';
     document.getElementById('r2_left').textContent='—';
@@ -894,115 +906,41 @@ function calc2(){
     return;
   }
 
-  // ── 2단계: 해당 연도 내에서 월 단위로 정확한 달 탐색 ──
-  // 전년도 말 자산에서 시작해서 월별로 증식+저축
-  let assetPrevYear = foundYear === 0 ? current
-    : (()=>{
-        let a=current;
-        for(let y=0;y<foundYear-1;y++) a=a*(1+preR)+annualSave;
-        // 전년도는 월별로 정밀하게
-        for(let m=0;m<12;m++) a=a*(1+preRm)+monthlySave;
-        return a;
-      })();
-
-  // foundYear==0이면 month=0부터 시작 (지금 바로)
-  let foundMonth=0;
-  let assetAtMonth=foundYear===0?current:assetPrevYear;
-
-  if(foundYear>0){
-    // 전년도 말 정확한 자산
-    let a2=current;
-    for(let y=0;y<foundYear;y++){
-      // 각 연도를 월별로
-      for(let m=0;m<12;m++) a2=a2*(1+preRm)+monthlySave;
-    }
-    // 이 시점이 foundYear 초 → 여기서부터 월별 탐색
-    assetAtMonth=a2;
-    // 사실 foundYear 시작 시점은 foundYear-1 말
-    // 다시: foundYear 시작 자산을 월별로 재계산
-    let aStart=current;
-    for(let y=0;y<foundYear;y++){
-      for(let m=0;m<12;m++) aStart=aStart*(1+preRm)+monthlySave;
-    }
-    assetAtMonth=aStart;
-  }
-
-  // foundYear 시작 자산을 정확히 계산
-  let aExact=current;
-  for(let y=0;y<foundYear;y++){
-    for(let m=0;m<12;m++) aExact=aExact*(1+preRm)+monthlySave;
-  }
-  assetAtMonth=aExact;
-
-  foundMonth=0;
-  let finalAsset=assetAtMonth;
-  let finalNeeded=0;
-
-  for(let m=0;m<12;m++){
-    const totalMonths=foundYear*12+m;
-    const rAgeExact=cAge+totalMonths/12;
-    const ly=ls-Math.floor(rAgeExact); // 남은 수명 (연 단위)
-    const yFrac=totalMonths/12;
-    const ra=ann*Math.pow(1+inf,yFrac);
-    const rAgeFl=cAge+Math.round(yFrac*10)/10;
-    let legacyAtDeath=0;
-    if(legacyNom>0) legacyAtDeath=legacyReal?legacyNom*Math.pow(1+inf,yFrac+ly):legacyNom;
-    const needed=calcNeeded(ra,ly,postR,inf,ssE,rAgeFl,legacyAtDeath);
-
-    if(assetAtMonth>=needed){
-      foundMonth=m;
-      finalAsset=assetAtMonth;
-      finalNeeded=needed;
-      break;
-    }
-    // 다음 달로
-    if(m<11){
-      assetAtMonth=assetAtMonth*(1+preRm)+monthlySave;
-      foundMonth=m+1;
-      finalAsset=assetAtMonth;
-    }
-  }
-
   w.style.display='none';
 
-  // 결과 표시용 값 계산
-  const totalMonths=foundYear*12+foundMonth;
-  const rAgeExact=cAge+totalMonths/12;
-  const rYear=CY+Math.floor(totalMonths/12);
-  const rMonth=new Date().getMonth()+1+foundMonth; // 현재 월 기준
-  const rAgeFl=cAge+Math.floor(totalMonths/12);
-  const ly=ls-rAgeFl;
-  const yFrac=totalMonths/12;
+  // 결과 계산
+  const remYears=Math.floor(foundTotalMonths/12);
+  const remMonths=foundTotalMonths%12;
+  const yFrac=foundTotalMonths/12;
+  const rAgeFrac=cAge+yFrac;
+  const rAgeInt=Math.floor(rAgeFrac);
+  const rYear=CY+remYears+(remMonths>0&&new Date().getMonth()+1+remMonths>12?1:0);
+  const ly=ls-rAgeInt;
   const ra=ann*Math.pow(1+inf,yFrac);
   let legacyAtDeath=0;
   if(legacyNom>0) legacyAtDeath=legacyReal?legacyNom*Math.pow(1+inf,yFrac+ly):legacyNom;
+  const finalNeeded=neededAt(foundTotalMonths);
 
-  // 남은 기간 표시
-  const remYears=foundYear;
-  const remMonths=foundMonth;
+  // 남은 기간 문자열
   let leftStr;
-  if(totalMonths===0){
-    leftStr='지금 가능';
-  } else if(remYears===0){
-    leftStr=`${remMonths}개월`;
-  } else if(remMonths===0){
-    leftStr=`${remYears}년`;
-  } else {
-    leftStr=`${remYears}년 ${remMonths}개월`;
-  }
+  if(foundTotalMonths===0) leftStr='지금 가능';
+  else if(remYears===0)    leftStr=`${remMonths}개월`;
+  else if(remMonths===0)   leftStr=`${remYears}년`;
+  else                     leftStr=`${remYears}년 ${remMonths}개월`;
 
-  // 나이 표시 (소수점 1자리)
-  const rAgeDisp=Math.floor(rAgeExact)+'세 '+(remMonths>0?`${remMonths}개월`:'');
+  // 은퇴 나이 문자열
+  let ageStr=`${rAgeInt}세`;
+  if(remMonths>0) ageStr+=` ${remMonths}개월`;
 
-  document.getElementById('r2_age').textContent=`${rAgeDisp.trim()} (${rYear}년)`;
-  document.getElementById('r2_sub').textContent=totalMonths===0?'지금 바로 은퇴 가능해요!':`지금으로부터 ${leftStr} 후`;
+  document.getElementById('r2_age').textContent=`${ageStr} (${CY+remYears}년)`;
+  document.getElementById('r2_sub').textContent=foundTotalMonths===0?'지금 바로 은퇴 가능해요!':`지금으로부터 ${leftStr} 후`;
   document.getElementById('r2_left').textContent=leftStr;
   document.getElementById('r2_final').textContent=fmt(finalAsset);
-  document.getElementById('r2_needed').textContent=fmt(finalNeeded||calcNeeded(ra,ly,postR,inf,ssE,rAgeFl,legacyAtDeath));
+  document.getElementById('r2_needed').textContent=fmt(finalNeeded);
   document.getElementById('r2_firstexp').textContent=fmt(ra)+' / 년';
-  document.getElementById('chart-sub2').textContent=`${rYear}년 은퇴 (${rAgeFl}세) → ${rYear+ly}년 (${ls}세)`;
+  document.getElementById('chart-sub2').textContent=`${CY+remYears}년 은퇴 (${rAgeInt}세) → ${CY+remYears+ly}년 (${ls}세)`;
 
-  setTimeout(()=>drawRC2(finalAsset,rYear,rAgeFl,ra,postR,inf,ls,ssE,legacyAtDeath),50);
+  setTimeout(()=>drawRC2(finalAsset,CY+remYears,rAgeInt,ra,postR,inf,ls,ssE,legacyAtDeath),50);
 }
 
 function addRow(name='',amount='',period='monthly'){
